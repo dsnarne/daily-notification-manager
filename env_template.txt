@@ -1,0 +1,158 @@
+# DaiLY Notification Manager Environment Configuration
+# Copy this file to .env and fill in your actual values
+
+# =============================================================================
+# APPLICATION SETTINGS
+# =============================================================================
+
+# Secret key for JWT tokens and session management
+SECRET_KEY=your-super-secret-key-here-change-this-in-production
+
+# Database configuration
+DATABASE_URL=sqlite:///./daily_notifications.db
+
+# Notification check interval in seconds
+NOTIFICATION_CHECK_INTERVAL=300
+
+# =============================================================================
+# EMAIL INTEGRATION SETTINGS
+# =============================================================================
+
+# Gmail API Configuration
+GMAIL_CLIENT_ID=your-gmail-client-id
+GMAIL_CLIENT_SECRET=your-gmail-client-secret
+GMAIL_REDIRECT_URI=http://localhost:8000/auth/gmail/callback
+
+# Outlook/Exchange Configuration
+OUTLOOK_CLIENT_ID=your-outlook-client-id
+OUTLOOK_CLIENT_SECRET=your-outlook-client-secret
+OUTLOOK_TENANT_ID=your-microsoft-tenant-id
+OUTLOOK_REDIRECT_URI=http://localhost:8000/auth/outlook/callback
+
+# Generic SMTP Configuration
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_USE_TLS=true
+
+# =============================================================================
+# SLACK INTEGRATION SETTINGS
+# =============================================================================
+
+# Slack App Configuration
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_SIGNING_SECRET=your-slack-signing-secret
+SLACK_APP_TOKEN=xapp-your-app-token
+
+# =============================================================================
+# MICROSOFT TEAMS INTEGRATION SETTINGS
+# =============================================================================
+
+# Microsoft Graph API Configuration
+TEAMS_CLIENT_ID=your-teams-client-id
+TEAMS_CLIENT_SECRET=your-teams-client-secret
+TEAMS_TENANT_ID=your-microsoft-tenant-id
+TEAMS_REDIRECT_URI=http://localhost:8000/auth/teams/callback
+
+# =============================================================================
+# WEBHOOK INTEGRATION SETTINGS
+# =============================================================================
+
+# Webhook security settings
+WEBHOOK_SECRET_KEY=your-webhook-secret-key
+WEBHOOK_TIMEOUT=30
+WEBHOOK_MAX_RETRIES=3
+WEBHOOK_RETRY_DELAY=5
+
+# =============================================================================
+# LOGGING AND DEBUG SETTINGS
+# =============================================================================
+
+# Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+LOG_LEVEL=INFO
+
+# Enable debug mode (True/False)
+DEBUG=False
+
+# =============================================================================
+# SERVER SETTINGS
+# =============================================================================
+
+# Server host and port
+HOST=0.0.0.0
+PORT=8000
+
+# CORS settings
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+
+# =============================================================================
+# SECURITY SETTINGS
+# =============================================================================
+
+# JWT token expiration (in seconds)
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Password hashing rounds
+PASSWORD_HASH_ROUNDS=12
+
+# =============================================================================
+# NOTIFICATION SETTINGS
+# =============================================================================
+
+# Default notification priority
+DEFAULT_PRIORITY=medium
+
+# Maximum notifications to store
+MAX_NOTIFICATIONS=1000
+
+# Notification cleanup interval (in hours)
+CLEANUP_INTERVAL_HOURS=24
+
+# =============================================================================
+# INTEGRATION TESTING SETTINGS
+# =============================================================================
+
+# Test mode (True/False)
+TEST_MODE=False
+
+# Mock API responses for testing
+USE_MOCK_APIS=False
+
+# =============================================================================
+# BACKUP AND MAINTENANCE SETTINGS
+# =============================================================================
+
+# Auto-backup database (True/False)
+AUTO_BACKUP=True
+
+# Backup retention days
+BACKUP_RETENTION_DAYS=30
+
+# =============================================================================
+# MONITORING AND ALERTS SETTINGS
+# =============================================================================
+
+# Health check interval (in seconds)
+HEALTH_CHECK_INTERVAL=60
+
+# Alert on integration failures (True/False)
+ALERT_ON_FAILURES=True
+
+# =============================================================================
+# NOTES AND INSTRUCTIONS
+# =============================================================================
+
+# IMPORTANT: Never commit your actual .env file to version control!
+# This file contains sensitive information like API keys and secrets.
+
+# To use this configuration:
+# 1. Copy this file to .env: cp env_template.txt .env
+# 2. Fill in your actual API keys and configuration values
+# 3. Keep your .env file secure and never share it
+
+# For production deployments:
+# - Use strong, unique secret keys
+# - Store sensitive values in environment variables or secure vaults
+# - Regularly rotate API keys and secrets
+# - Use HTTPS for all external communications 

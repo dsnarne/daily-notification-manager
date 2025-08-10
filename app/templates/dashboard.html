@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DaiLY Notification Manager - Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: #333; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { background: rgba(255, 255, 255, 0.95); border-radius: 20px; padding: 30px; margin-bottom: 30px; text-align: center; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); }
+        .header h1 { font-size: 2.5rem; color: #4a5568; margin-bottom: 10px; }
+        .header p { font-size: 1.1rem; color: #718096; }
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 25px; margin-bottom: 30px; }
+        .card { background: rgba(255, 255, 255, 0.95); border-radius: 20px; padding: 25px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); transition: transform 0.3s ease; }
+        .card:hover { transform: translateY(-5px); }
+        .card h2 { color: #4a5568; margin-bottom: 20px; font-size: 1.5rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+        .btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 24px; border-radius: 25px; cursor: pointer; font-size: 0.9rem; font-weight: 600; margin: 5px; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4); }
+        .btn-secondary { background: linear-gradient(135deg, #718096 0%, #4a5568 100%); }
+        .btn-danger { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); }
+        .btn-success { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }
+        .integration-item, .notification-item { background: #f7fafc; border-radius: 15px; padding: 15px; margin: 10px 0; border-left: 4px solid #667eea; }
+        .notification-item.priority-high { border-left-color: #f56565; }
+        .notification-item.priority-medium { border-left-color: #ed8936; }
+        .notification-item.priority-low { border-left-color: #48bb78; }
+        .notification-item.priority-urgent { border-left-color: #9f7aea; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 15px; text-align: center; }
+        .stat-number { font-size: 2rem; font-weight: bold; margin-bottom: 5px; }
+        .stat-label { font-size: 0.9rem; opacity: 0.9; }
+        .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+        .status-online { background-color: #48bb78; }
+        .status-offline { background-color: #f56565; }
+        .status-warning { background-color: #ed8936; }
+        .tabs { display: flex; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
+        .tab { padding: 15px 25px; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.3s ease; }
+        .tab.active { border-bottom-color: #667eea; color: #667eea; font-weight: 600; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .refresh-btn { position: fixed; bottom: 30px; right: 30px; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; cursor: pointer; box-shadow: 0 8px 25px rgba(72, 187, 120, 0.4); }
+        .refresh-btn::before { content: "↻"; font-size: 1.5rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 DaiLY Notification Manager</h1>
+            <p>Your unified workspace for managing all notifications and integrations</p>
+        </div>
+
+        <div class="card">
+            <h2>📊 System Overview</h2>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-number" id="total-integrations">-</div>
+                    <div class="stat-label">Integrations</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number" id="total-notifications">-</div>
+                    <div class="stat-label">Notifications</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number" id="active-rules">-</div>
+                    <div class="stat-label">Active Rules</div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <h2>🔌 Integrations</h2>
+                <div id="integrations-list">Loading integrations...</div>
+                <button class="btn" onclick="showAddIntegrationModal()">➕ Add Integration</button>
+                <button class="btn btn-secondary" onclick="refreshIntegrations()">🔄 Refresh</button>
+            </div>
+
+            <div class="card">
+                <h2>📨 Notifications</h2>
+                <div class="tabs">
+                    <div class="tab active" onclick="switchTab('all')">All</div>
+                    <div class="tab" onclick="switchTab('high')">High Priority</div>
+                    <div class="tab" onclick="switchTab('recent')">Recent</div>
+                </div>
+                <div id="notifications-list">Loading notifications...</div>
+                <button class="btn btn-secondary" onclick="refreshNotifications()">🔄 Refresh</button>
+            </div>
+
+            <div class="card">
+                <h2>⚙️ Rules & Settings</h2>
+                <div id="rules-list">Loading rules...</div>
+                <button class="btn" onclick="showAddRuleModal()">➕ Add Rule</button>
+                <button class="btn btn-secondary" onclick="refreshRules()">🔄 Refresh</button>
+            </div>
+
+
+        </div>
+
+        <div class="card">
+            <h2>📈 Recent Activity</h2>
+            <div id="activity-log">Loading activity...</div>
+        </div>
+    </div>
+
+    <button class="refresh-btn" onclick="refreshAll()" title="Refresh All Data"></button>
+
+    <script>
+        let currentTab = 'all';
+        let integrations = [];
+        let notifications = [];
+        let rules = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshAll();
+            setInterval(refreshAll, 30000);
+        });
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            displayNotifications();
+        }
+
+        async function refreshAll() {
+            await Promise.all([
+                refreshIntegrations(),
+                refreshNotifications(),
+                refreshRules()
+            ]);
+            updateStats();
+        }
+
+        async function refreshIntegrations() {
+            try {
+                const response = await fetch('/api/integrations');
+                if (response.ok) {
+                    integrations = await response.json();
+                    displayIntegrations();
+                } else {
+                    document.getElementById('integrations-list').innerHTML = '<p>❌ Failed to load integrations</p>';
+                }
+            } catch (error) {
+                document.getElementById('integrations-list').innerHTML = '<p>❌ Error loading integrations</p>';
+            }
+        }
+
+        function displayIntegrations() {
+            const container = document.getElementById('integrations-list');
+            if (integrations.length === 0) {
+                container.innerHTML = '<p>No integrations configured yet.</p>';
+                return;
+            }
+
+            container.innerHTML = integrations.map(integration => `
+                <div class="integration-item">
+                    <h3>${integration.name || integration.type}</h3>
+                    <p><span class="status-indicator status-${integration.status || 'offline'}"></span>${integration.status || 'Unknown'}</p>
+                    <p>Type: ${integration.type}</p>
+                    <p>Last checked: ${integration.last_checked || 'Never'}</p>
+                    <button class="btn btn-secondary" onclick="testIntegration('${integration.id}')">Test</button>
+                    <button class="btn btn-danger" onclick="deleteIntegration('${integration.id}')">Delete</button>
+                </div>
+            `).join('');
+        }
+
+        async function refreshNotifications() {
+            try {
+                const response = await fetch('/api/notifications');
+                if (response.ok) {
+                    notifications = await response.json();
+                    displayNotifications();
+                } else {
+                    document.getElementById('notifications-list').innerHTML = '<p>❌ Failed to load notifications</p>';
+                }
+            } catch (error) {
+                document.getElementById('notifications-list').innerHTML = '<p>❌ Error loading notifications</p>';
+            }
+        }
+
+        function displayNotifications() {
+            const container = document.getElementById('notifications-list');
+            let filteredNotifications = notifications;
+
+            if (currentTab === 'high') {
+                filteredNotifications = notifications.filter(n => n.priority === 'high' || n.priority === 'urgent');
+            } else if (currentTab === 'recent') {
+                filteredNotifications = notifications.slice(0, 5);
+            }
+
+            if (filteredNotifications.length === 0) {
+                container.innerHTML = '<p>No notifications found.</p>';
+                return;
+            }
+
+            container.innerHTML = filteredNotifications.map(notification => `
+                <div class="notification-item priority-${notification.priority || 'medium'}">
+                    <h3>${notification.title}</h3>
+                    <p>${notification.content}</p>
+                    <p>Priority: ${notification.priority || 'medium'} | Platform: ${notification.platform || 'unknown'}</p>
+                    <p>Time: ${notification.created_at || 'Unknown'}</p>
+                </div>
+            `).join('');
+        }
+
+        async function refreshRules() {
+            try {
+                const response = await fetch('/api/rules');
+                if (response.ok) {
+                    rules = await response.json();
+                    displayRules();
+                } else {
+                    document.getElementById('rules-list').innerHTML = '<p>❌ Failed to load rules</p>';
+                }
+            } catch (error) {
+                document.getElementById('rules-list').innerHTML = '<p>❌ Error loading rules</p>';
+            }
+        }
+
+        function displayRules() {
+            const container = document.getElementById('rules-list');
+            if (rules.length === 0) {
+                container.innerHTML = '<p>No rules configured yet.</p>';
+                return;
+            }
+
+            container.innerHTML = rules.map(rule => `
+                <div class="integration-item">
+                    <h3>${rule.name}</h3>
+                    <p>Priority: ${rule.priority}</p>
+                    <p>Platform: ${rule.platform}</p>
+                    <p>Conditions: ${JSON.stringify(rule.conditions || {})}</p>
+                    <button class="btn btn-danger" onclick="deleteRule('${rule.id}')">Delete</button>
+                </div>
+                `).join('');
+        }
+
+        async function refreshSystemStatus() {
+            try {
+                const response = await fetch('/api/status');
+                if (response.ok) {
+                    const status = await response.json();
+                    displaySystemStatus(status);
+                } else {
+                    document.getElementById('system-health').innerHTML = '<p>❌ Failed to load system status</p>';
+                }
+            } catch (error) {
+                document.getElementById('system-health').innerHTML = '<p>❌ Error loading system status</p>';
+            }
+        }
+
+        function displaySystemStatus(status) {
+            const container = document.getElementById('system-health');
+            container.innerHTML = `
+                <p><span class="status-indicator status-${status.database === 'Connected' ? 'online' : 'offline'}"></span>Database: ${status.database}</p>
+                <p><span class="status-indicator status-${status.scheduler === 'Active' ? 'online' : 'offline'}"></span>Scheduler: ${status.scheduler}</p>
+                <p><span class="status-indicator status-${status.api === 'Available' ? 'online' : 'offline'}"></span>API: ${status.api}</p>
+                <p>Last updated: ${new Date().toLocaleTimeString()}</p>
+            `;
+        }
+
+        function updateStats() {
+            document.getElementById('total-integrations').textContent = integrations.length;
+            document.getElementById('total-notifications').textContent = notifications.length;
+            document.getElementById('active-rules').textContent = rules.length;
+            
+
+        }
+
+        function showAddIntegrationModal() {
+            alert('Integration creation will be implemented with backend API');
+        }
+
+        function showAddRuleModal() {
+            const modal = document.getElementById('ruleModal');
+            modal.style.display = 'block';
+        }
+
+        function closeRuleModal() {
+            const modal = document.getElementById('ruleModal');
+            modal.style.display = 'none';
+            // Reset form
+            document.getElementById('ruleForm').reset();
+        }
+
+        async function createRule() {
+            const formData = new FormData(document.getElementById('ruleForm'));
+            const ruleData = {
+                name: formData.get('ruleName'),
+                priority: formData.get('priority'),
+                platform: formData.get('platform'),
+                conditions: {}
+            };
+
+            // Build conditions based on form inputs
+            if (formData.get('senderEmail')) {
+                ruleData.conditions.sender = formData.get('senderEmail');
+            }
+            if (formData.get('keyword')) {
+                ruleData.conditions.keyword = formData.get('keyword');
+            }
+            if (formData.get('channel')) {
+                ruleData.conditions.channel = formData.get('channel');
+            }
+
+            try {
+                const response = await fetch('/api/rules', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(ruleData)
+                });
+
+                if (response.ok) {
+                    alert('Rule created successfully!');
+                    closeRuleModal();
+                    refreshRules();
+                } else {
+                    alert('Failed to create rule');
+                }
+            } catch (error) {
+                alert('Error creating rule: ' + error.message);
+            }
+        }
+
+        async function testIntegration(integrationId) {
+            try {
+                const response = await fetch(`/api/integrations/${integrationId}/test`, { method: 'POST' });
+                if (response.ok) {
+                    alert('Integration test completed successfully!');
+                } else {
+                    alert('Integration test failed. Check logs for details.');
+                }
+            } catch (error) {
+                alert('Error testing integration: ' + error.message);
+            }
+        }
+
+        async function deleteIntegration(integrationId) {
+            if (confirm('Are you sure you want to delete this integration?')) {
+                try {
+                    const response = await fetch(`/api/integrations/${integrationId}`, { method: 'DELETE' });
+                    if (response.ok) {
+                        refreshIntegrations();
+                    } else {
+                        alert('Failed to delete integration');
+                    }
+                } catch (error) {
+                    alert('Error deleting integration: ' + error.message);
+                }
+            }
+        }
+
+        async function deleteRule(ruleId) {
+            if (confirm('Are you sure you want to delete this rule?')) {
+                try {
+                    const response = await fetch(`/api/rules/${ruleId}`, { method: 'DELETE' });
+                    if (response.ok) {
+                        refreshRules();
+                    } else {
+                        alert('Failed to delete rule');
+                    }
+                } catch (error) {
+                    alert('Error deleting rule: ' + error.message);
+                }
+            }
+        }
+
+        async function runSystemTest() {
+            try {
+                const response = await fetch('/api/test', { method: 'POST' });
+                if (response.ok) {
+                    alert('System test completed! Check the activity log for details.');
+                    refreshSystemStatus();
+                } else {
+                    alert('System test failed. Check logs for details.');
+                }
+            } catch (error) {
+                alert('Error running system test: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html> 
