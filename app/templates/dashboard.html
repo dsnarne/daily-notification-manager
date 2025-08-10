@@ -6,380 +6,471 @@
     <title>DaiLY Notification Manager - Dashboard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: #333; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        .header { background: rgba(255, 255, 255, 0.95); border-radius: 20px; padding: 30px; margin-bottom: 30px; text-align: center; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); }
-        .header h1 { font-size: 2.5rem; color: #4a5568; margin-bottom: 10px; }
-        .header p { font-size: 1.1rem; color: #718096; }
-        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 25px; margin-bottom: 30px; }
-        .card { background: rgba(255, 255, 255, 0.95); border-radius: 20px; padding: 25px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); transition: transform 0.3s ease; }
-        .card:hover { transform: translateY(-5px); }
-        .card h2 { color: #4a5568; margin-bottom: 20px; font-size: 1.5rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
-        .btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 24px; border-radius: 25px; cursor: pointer; font-size: 0.9rem; font-weight: 600; margin: 5px; }
-        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4); }
-        .btn-secondary { background: linear-gradient(135deg, #718096 0%, #4a5568 100%); }
-        .btn-danger { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); }
-        .btn-success { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }
-        .integration-item, .notification-item { background: #f7fafc; border-radius: 15px; padding: 15px; margin: 10px 0; border-left: 4px solid #667eea; }
-        .notification-item.priority-high { border-left-color: #f56565; }
-        .notification-item.priority-medium { border-left-color: #ed8936; }
-        .notification-item.priority-low { border-left-color: #48bb78; }
-        .notification-item.priority-urgent { border-left-color: #9f7aea; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .stat-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 15px; text-align: center; }
-        .stat-number { font-size: 2rem; font-weight: bold; margin-bottom: 5px; }
-        .stat-label { font-size: 0.9rem; opacity: 0.9; }
-        .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
-        .status-online { background-color: #48bb78; }
-        .status-offline { background-color: #f56565; }
-        .status-warning { background-color: #ed8936; }
-        .tabs { display: flex; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
-        .tab { padding: 15px 25px; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.3s ease; }
-        .tab.active { border-bottom-color: #667eea; color: #667eea; font-weight: 600; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .refresh-btn { position: fixed; bottom: 30px; right: 30px; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; cursor: pointer; box-shadow: 0 8px 25px rgba(72, 187, 120, 0.4); }
-        .refresh-btn::before { content: "↻"; font-size: 1.5rem; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #f5f7fa; 
+            color: #333; 
+            line-height: 1.6;
+        }
+        .container { 
+            max-width: 1400px; 
+            margin: 0 auto; 
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 30px;
+        }
+        .main-content { grid-column: 1; }
+        .sidebar { 
+            grid-column: 2; 
+            position: sticky;
+            top: 20px;
+            height: fit-content;
+        }
+        .header { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            text-align: center;
+            grid-column: 1 / -1;
+        }
+        .header h1 { 
+            font-size: 2.5em; 
+            font-weight: 300;
+            margin-bottom: 10px;
+        }
+        .header p { 
+            opacity: 0.9; 
+            font-size: 1.1em;
+        }
+        .stats-grid { 
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card { 
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            transition: transform 0.2s;
+        }
+        .stat-card:hover { transform: translateY(-5px); }
+        .stat-number { 
+            font-size: 2em; 
+            font-weight: bold; 
+            color: #667eea; 
+            margin-bottom: 10px;
+        }
+        .stat-label { 
+            color: #666; 
+            font-size: 1em;
+        }
+        .section { 
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+        .section h2 { 
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .btn { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+        .btn:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+        .btn-secondary { background: #6c757d; }
+        .btn-danger { background: #dc3545; }
+        .btn-success { background: #28a745; }
+        .btn-sm { 
+            padding: 8px 16px; 
+            font-size: 0.9em;
+        }
+        .integration-item, .rule-item { 
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+        .integration-item h3, .rule-item h3 { 
+            margin: 0 0 10px 0;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .integration-item p, .rule-item p { 
+            margin: 5px 0;
+            color: #666;
+        }
+        .status-online { color: #28a745; font-weight: bold; }
+        .status-offline { color: #dc3545; font-weight: bold; }
+        
+        /* Priority Badges */
+        .priority-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .priority-low { background-color: #d4edda; color: #155724; }
+        .priority-medium { background-color: #fff3cd; color: #856404; }
+        .priority-high { background-color: #f8d7da; color: #721c24; }
+        .priority-urgent { background-color: #f5c6cb; color: #721c24; }
+        
+        /* Platform Badges */
+        .platform-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-left: 10px;
+        }
+        .platform-email { background-color: #e3f2fd; color: #1976d2; }
+        .platform-slack { background-color: #f3e5f5; color: #7b1fa2; }
+        .platform-teams { background-color: #e8f5e8; color: #388e3c; }
+        .platform-webhook { background-color: #fff3e0; color: #f57c00; }
+        
+        /* Sidebar Styles */
+        .sidebar-section {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .sidebar-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 8px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>🚀 DaiLY Notification Manager</h1>
-            <p>Your unified workspace for managing all notifications and integrations</p>
-        </div>
+        <div class="main-content">
+            <!-- Header -->
+            <div class="header">
+                <h1>DaiLY Notification Manager</h1>
+                <p>Intelligent notification filtering and management</p>
+            </div>
 
-        <div class="card">
-            <h2>📊 System Overview</h2>
+            <!-- Statistics -->
             <div class="stats-grid">
-                <div class="stat-box">
-                    <div class="stat-number" id="total-integrations">-</div>
-                    <div class="stat-label">Integrations</div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalIntegrations">0</div>
+                    <div class="stat-label">Active Integrations</div>
                 </div>
-                <div class="stat-box">
-                    <div class="stat-number" id="total-notifications">-</div>
-                    <div class="stat-label">Notifications</div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalRules">0</div>
+                    <div class="stat-label">Notification Rules</div>
                 </div>
-                <div class="stat-box">
-                    <div class="stat-number" id="active-rules">-</div>
-                    <div class="stat-label">Active Rules</div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalNotifications">0</div>
+                    <div class="stat-label">Today's Notifications</div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="systemStatus">Online</div>
+                    <div class="stat-label">System Status</div>
+                </div>
+            </div>
 
+            <!-- Integrations Section -->
+            <div class="section">
+                <h2>
+                    Integrations
+                    <button class="btn" onclick="showIntegrationModal()">Add Integration</button>
+                </h2>
+                <div id="integrationsList"></div>
+            </div>
+
+            <!-- Rules Section -->
+            <div class="section">
+                <h2>
+                    Notification Rules
+                    <button class="btn" onclick="showRuleModal()">Add Rule</button>
+                </h2>
+                <div id="rulesList"></div>
             </div>
         </div>
 
-        <div class="dashboard-grid">
-            <div class="card">
-                <h2>🔌 Integrations</h2>
-                <div id="integrations-list">Loading integrations...</div>
-                <button class="btn" onclick="showAddIntegrationModal()">➕ Add Integration</button>
-                <button class="btn btn-secondary" onclick="refreshIntegrations()">🔄 Refresh</button>
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <!-- Recent Notifications -->
+            <div class="sidebar-section">
+                <h3>Recent Notifications</h3>
+                <div id="recentNotifications"></div>
             </div>
 
-            <div class="card">
-                <h2>📨 Notifications</h2>
-                <div class="tabs">
-                    <div class="tab active" onclick="switchTab('all')">All</div>
-                    <div class="tab" onclick="switchTab('high')">High Priority</div>
-                    <div class="tab" onclick="switchTab('recent')">Recent</div>
-                </div>
-                <div id="notifications-list">Loading notifications...</div>
-                <button class="btn btn-secondary" onclick="refreshNotifications()">🔄 Refresh</button>
+            <!-- Priority Overview -->
+            <div class="sidebar-section">
+                <h3>Priority Overview</h3>
+                <div id="priorityOverview"></div>
             </div>
 
-            <div class="card">
-                <h2>⚙️ Rules & Settings</h2>
-                <div id="rules-list">Loading rules...</div>
-                <button class="btn" onclick="showAddRuleModal()">➕ Add Rule</button>
-                <button class="btn btn-secondary" onclick="refreshRules()">🔄 Refresh</button>
+            <!-- Quick Actions -->
+            <div class="sidebar-section">
+                <h3>Quick Actions</h3>
+                <button class="btn btn-sm" onclick="refreshAll()">Refresh All</button>
+                <button class="btn btn-sm btn-secondary" onclick="showIntegrationModal()">New Integration</button>
+                <button class="btn btn-sm btn-success" onclick="showRuleModal()">New Rule</button>
             </div>
-
-
-        </div>
-
-        <div class="card">
-            <h2>📈 Recent Activity</h2>
-            <div id="activity-log">Loading activity...</div>
         </div>
     </div>
 
-    <button class="refresh-btn" onclick="refreshAll()" title="Refresh All Data"></button>
-
     <script>
-        let currentTab = 'all';
+        // Global variables
         let integrations = [];
-        let notifications = [];
         let rules = [];
+        let notifications = [];
 
+        // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
             refreshAll();
-            setInterval(refreshAll, 30000);
         });
 
-        function switchTab(tabName) {
-            currentTab = tabName;
-            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-            event.target.classList.add('active');
-            displayNotifications();
-        }
-
+        // Refresh all data
         async function refreshAll() {
             await Promise.all([
-                refreshIntegrations(),
-                refreshNotifications(),
-                refreshRules()
+                loadIntegrations(),
+                loadRules(),
+                loadNotifications()
             ]);
             updateStats();
         }
 
-        async function refreshIntegrations() {
+        // Load integrations
+        async function loadIntegrations() {
             try {
                 const response = await fetch('/api/integrations');
-                if (response.ok) {
-                    integrations = await response.json();
-                    displayIntegrations();
-                } else {
-                    document.getElementById('integrations-list').innerHTML = '<p>❌ Failed to load integrations</p>';
-                }
+                integrations = await response.json();
+                displayIntegrations();
             } catch (error) {
-                document.getElementById('integrations-list').innerHTML = '<p>❌ Error loading integrations</p>';
+                console.error('Error loading integrations:', error);
             }
         }
 
+        // Display integrations
         function displayIntegrations() {
-            const container = document.getElementById('integrations-list');
+            const container = document.getElementById('integrationsList');
             if (integrations.length === 0) {
-                container.innerHTML = '<p>No integrations configured yet.</p>';
+                container.innerHTML = '<p>No integrations configured. Add your first integration to get started.</p>';
                 return;
             }
 
             container.innerHTML = integrations.map(integration => `
                 <div class="integration-item">
-                    <h3>${integration.name || integration.type}</h3>
-                    <p><span class="status-indicator status-${integration.status || 'offline'}"></span>${integration.status || 'Unknown'}</p>
-                    <p>Type: ${integration.type}</p>
-                    <p>Last checked: ${integration.last_checked || 'Never'}</p>
-                    <button class="btn btn-secondary" onclick="testIntegration('${integration.id}')">Test</button>
-                    <button class="btn btn-danger" onclick="deleteIntegration('${integration.id}')">Delete</button>
+                    <h3>
+                        ${integration.name}
+                        <div>
+                            <span class="platform-badge platform-${integration.platform}">${integration.platform}</span>
+                            <span class="status-${integration.status}">${integration.status}</span>
+                        </div>
+                    </h3>
+                    <p><strong>Platform:</strong> ${integration.platform}</p>
+                    <p><strong>Last Checked:</strong> ${new Date(integration.last_checked).toLocaleString()}</p>
+                    <div>
+                        <button class="btn btn-sm btn-success" onclick="testIntegration('${integration.id}')">Test</button>
+                        <button class="btn btn-sm btn-secondary" onclick="editIntegration('${integration.id}')">Edit</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteIntegration('${integration.id}')">Delete</button>
+                    </div>
                 </div>
             `).join('');
         }
 
-        async function refreshNotifications() {
-            try {
-                const response = await fetch('/api/notifications');
-                if (response.ok) {
-                    notifications = await response.json();
-                    displayNotifications();
-                } else {
-                    document.getElementById('notifications-list').innerHTML = '<p>❌ Failed to load notifications</p>';
-                }
-            } catch (error) {
-                document.getElementById('notifications-list').innerHTML = '<p>❌ Error loading notifications</p>';
-            }
-        }
-
-        function displayNotifications() {
-            const container = document.getElementById('notifications-list');
-            let filteredNotifications = notifications;
-
-            if (currentTab === 'high') {
-                filteredNotifications = notifications.filter(n => n.priority === 'high' || n.priority === 'urgent');
-            } else if (currentTab === 'recent') {
-                filteredNotifications = notifications.slice(0, 5);
-            }
-
-            if (filteredNotifications.length === 0) {
-                container.innerHTML = '<p>No notifications found.</p>';
-                return;
-            }
-
-            container.innerHTML = filteredNotifications.map(notification => `
-                <div class="notification-item priority-${notification.priority || 'medium'}">
-                    <h3>${notification.title}</h3>
-                    <p>${notification.content}</p>
-                    <p>Priority: ${notification.priority || 'medium'} | Platform: ${notification.platform || 'unknown'}</p>
-                    <p>Time: ${notification.created_at || 'Unknown'}</p>
-                </div>
-            `).join('');
-        }
-
-        async function refreshRules() {
+        // Load rules
+        async function loadRules() {
             try {
                 const response = await fetch('/api/rules');
-                if (response.ok) {
-                    rules = await response.json();
-                    displayRules();
-                } else {
-                    document.getElementById('rules-list').innerHTML = '<p>❌ Failed to load rules</p>';
-                }
+                rules = await response.json();
+                displayRules();
             } catch (error) {
-                document.getElementById('rules-list').innerHTML = '<p>❌ Error loading rules</p>';
+                console.error('Error loading rules:', error);
             }
         }
 
+        // Display rules
         function displayRules() {
-            const container = document.getElementById('rules-list');
+            const container = document.getElementById('rulesList');
             if (rules.length === 0) {
-                container.innerHTML = '<p>No rules configured yet.</p>';
+                container.innerHTML = '<p>No notification rules configured. Create your first rule to start filtering notifications.</p>';
                 return;
             }
 
             container.innerHTML = rules.map(rule => `
-                <div class="integration-item">
-                    <h3>${rule.name}</h3>
-                    <p>Priority: ${rule.priority}</p>
-                    <p>Platform: ${rule.platform}</p>
-                    <p>Conditions: ${JSON.stringify(rule.conditions || {})}</p>
-                    <button class="btn btn-danger" onclick="deleteRule('${rule.id}')">Delete</button>
+                <div class="rule-item">
+                    <h3>
+                        ${rule.name}
+                        <div>
+                            <span class="priority-badge priority-${rule.priority}">${rule.priority}</span>
+                            <span class="platform-badge platform-${rule.platform}">${rule.platform}</span>
+                        </div>
+                    </h3>
+                    <p><strong>Priority:</strong> ${rule.priority}</p>
+                    <p><strong>Platform:</strong> ${rule.platform}</p>
+                    <div style="margin-top: 10px;">
+                        <button class="btn btn-sm btn-secondary" onclick="editRule('${rule.id}')">Edit</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteRule('${rule.id}')">Delete</button>
+                    </div>
                 </div>
-                `).join('');
+            `).join('');
         }
 
-        async function refreshSystemStatus() {
+        // Load notifications
+        async function loadNotifications() {
             try {
-                const response = await fetch('/api/status');
-                if (response.ok) {
-                    const status = await response.json();
-                    displaySystemStatus(status);
-                } else {
-                    document.getElementById('system-health').innerHTML = '<p>❌ Failed to load system status</p>';
-                }
+                const response = await fetch('/api/notifications');
+                notifications = await response.json();
+                displayRecentNotifications();
+                displayPriorityOverview();
             } catch (error) {
-                document.getElementById('system-health').innerHTML = '<p>❌ Error loading system status</p>';
+                console.error('Error loading notifications:', error);
             }
         }
 
-        function displaySystemStatus(status) {
-            const container = document.getElementById('system-health');
+        // Display recent notifications
+        function displayRecentNotifications() {
+            const container = document.getElementById('recentNotifications');
+            const recent = notifications.slice(0, 5); // Show last 5
+            
+            if (recent.length === 0) {
+                container.innerHTML = '<p>No recent notifications</p>';
+                return;
+            }
+
+            container.innerHTML = recent.map(notification => `
+                <div class="notification-item">
+                    <h4>${notification.title}</h4>
+                    <p>${notification.message}</p>
+                    <p><small>${new Date(notification.timestamp).toLocaleString()}</small></p>
+                </div>
+            `).join('');
+        }
+
+        // Display priority overview
+        function displayPriorityOverview() {
+            const container = document.getElementById('priorityOverview');
+            const priorityCounts = {
+                low: 0, medium: 0, high: 0, urgent: 0
+            };
+            
+            notifications.forEach(notification => {
+                if (priorityCounts.hasOwnProperty(notification.priority)) {
+                    priorityCounts[notification.priority]++;
+                }
+            });
+
             container.innerHTML = `
-                <p><span class="status-indicator status-${status.database === 'Connected' ? 'online' : 'offline'}"></span>Database: ${status.database}</p>
-                <p><span class="status-indicator status-${status.scheduler === 'Active' ? 'online' : 'offline'}"></span>Scheduler: ${status.scheduler}</p>
-                <p><span class="status-indicator status-${status.api === 'Available' ? 'online' : 'offline'}"></span>API: ${status.api}</p>
-                <p>Last updated: ${new Date().toLocaleTimeString()}</p>
+                <div style="margin-bottom: 10px;">
+                    <span class="priority-badge priority-low">Low: ${priorityCounts.low}</span>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <span class="priority-badge priority-medium">Medium: ${priorityCounts.medium}</span>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <span class="priority-badge priority-high">High: ${priorityCounts.high}</span>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <span class="priority-badge priority-urgent">Urgent: ${priorityCounts.urgent}</span>
+                </div>
             `;
         }
 
+        // Update statistics
         function updateStats() {
-            document.getElementById('total-integrations').textContent = integrations.length;
-            document.getElementById('total-notifications').textContent = notifications.length;
-            document.getElementById('active-rules').textContent = rules.length;
-            
-
+            document.getElementById('totalIntegrations').textContent = integrations.length;
+            document.getElementById('totalRules').textContent = rules.length;
+            document.getElementById('totalNotifications').textContent = notifications.length;
         }
 
-        function showAddIntegrationModal() {
-            alert('Integration creation will be implemented with backend API');
+        // Placeholder functions for modals
+        function showIntegrationModal() {
+            alert('Integration modal coming soon!');
         }
 
-        function showAddRuleModal() {
-            const modal = document.getElementById('ruleModal');
-            modal.style.display = 'block';
+        function showRuleModal() {
+            alert('Rule modal coming soon!');
         }
 
-        function closeRuleModal() {
-            const modal = document.getElementById('ruleModal');
-            modal.style.display = 'none';
-            // Reset form
-            document.getElementById('ruleForm').reset();
-        }
-
-        async function createRule() {
-            const formData = new FormData(document.getElementById('ruleForm'));
-            const ruleData = {
-                name: formData.get('ruleName'),
-                priority: formData.get('priority'),
-                platform: formData.get('platform'),
-                conditions: {}
-            };
-
-            // Build conditions based on form inputs
-            if (formData.get('senderEmail')) {
-                ruleData.conditions.sender = formData.get('senderEmail');
-            }
-            if (formData.get('keyword')) {
-                ruleData.conditions.keyword = formData.get('keyword');
-            }
-            if (formData.get('channel')) {
-                ruleData.conditions.channel = formData.get('channel');
-            }
-
+        // CRUD Operations
+        async function testIntegration(id) {
             try {
-                const response = await fetch('/api/rules', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(ruleData)
-                });
-
-                if (response.ok) {
-                    alert('Rule created successfully!');
-                    closeRuleModal();
-                    refreshRules();
-                } else {
-                    alert('Failed to create rule');
-                }
+                const response = await fetch(`/api/integrations/${id}/test`, { method: 'POST' });
+                const result = await response.json();
+                alert(`Integration test: ${result.message}`);
             } catch (error) {
-                alert('Error creating rule: ' + error.message);
+                alert('Error testing integration');
             }
         }
 
-        async function testIntegration(integrationId) {
-            try {
-                const response = await fetch(`/api/integrations/${integrationId}/test`, { method: 'POST' });
-                if (response.ok) {
-                    alert('Integration test completed successfully!');
-                } else {
-                    alert('Integration test failed. Check logs for details.');
-                }
-            } catch (error) {
-                alert('Error testing integration: ' + error.message);
-            }
-        }
-
-        async function deleteIntegration(integrationId) {
+        async function deleteIntegration(id) {
             if (confirm('Are you sure you want to delete this integration?')) {
                 try {
-                    const response = await fetch(`/api/integrations/${integrationId}`, { method: 'DELETE' });
+                    const response = await fetch(`/api/integrations/${id}`, { method: 'DELETE' });
                     if (response.ok) {
-                        refreshIntegrations();
+                        alert('Integration deleted successfully!');
+                        refreshAll();
                     } else {
                         alert('Failed to delete integration');
                     }
                 } catch (error) {
-                    alert('Error deleting integration: ' + error.message);
+                    alert('Error deleting integration');
                 }
             }
         }
 
-        async function deleteRule(ruleId) {
+        async function deleteRule(id) {
             if (confirm('Are you sure you want to delete this rule?')) {
                 try {
-                    const response = await fetch(`/api/rules/${ruleId}`, { method: 'DELETE' });
+                    const response = await fetch(`/api/rules/${id}`, { method: 'DELETE' });
                     if (response.ok) {
-                        refreshRules();
+                        alert('Rule deleted successfully!');
+                        refreshAll();
                     } else {
                         alert('Failed to delete rule');
                     }
                 } catch (error) {
-                    alert('Error deleting rule: ' + error.message);
+                    alert('Error deleting rule');
                 }
             }
         }
 
-        async function runSystemTest() {
-            try {
-                const response = await fetch('/api/test', { method: 'POST' });
-                if (response.ok) {
-                    alert('System test completed! Check the activity log for details.');
-                    refreshSystemStatus();
-                } else {
-                    alert('System test failed. Check logs for details.');
-                }
-            } catch (error) {
-                alert('Error running system test: ' + error.message);
-            }
+        function editIntegration(id) {
+            alert('Edit functionality coming soon!');
+        }
+
+        function editRule(id) {
+            alert('Edit functionality coming soon!');
         }
     </script>
 </body>
