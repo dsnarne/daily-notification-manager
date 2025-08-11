@@ -7,8 +7,8 @@ from typing import List, Dict, Any
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    """Application settings"""
     
+    """Application settings"""
     # Application
     app_name: str = "DaiLY Notification Manager"
     app_version: str = "1.0.0"
