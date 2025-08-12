@@ -90,9 +90,14 @@ for line in sys.stdin:
             if name == "list_notifications":
                 if name == "list_notifications":
                     try:
-                        payload = handle_list_notifications(arguments)
+                        items = handle_list_notifications(arguments)
+                        payload = [Notification(**x).model_dump(mode="json") for x in items]
                         log(f"TOOL RESULT COUNT: {len(payload)}")
-                        send_result(rid, {"content": [{"type": "json", "json": payload}]})
+                        send_result(rid, {
+                            "content": [
+                                {"type": "text", "text": json.dumps(payload, ensure_ascii=False)}
+                            ]
+                        })
                     except Exception as e:
                         log("TOOLS/CALL ERROR:", repr(e))
                         log(traceback.format_exc())
@@ -101,7 +106,6 @@ for line in sys.stdin:
                             "trace": traceback.format_exc(),
                             "arguments": arguments,
                         })
-                send_result(rid, {"content": [{"type": "json", "json": payload}]})
             else:
                 send_error(rid, -32601, f"Unknown tool: {name}")
             continue
