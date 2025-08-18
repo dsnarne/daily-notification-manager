@@ -2,8 +2,8 @@
 import sys, json, traceback
 from typing import Any, Dict, Optional, List
 
-from services.mcp_gmail.schemas import Notification
-from services.mcp_gmail.gmail_api import list_gmail_notifications
+from mcp_servers.communication_server.schemas import Notification
+from mcp_servers.communication_server.gmail_api import list_gmail_notifications
 import os
 
 # Enable debug logging when MCP_DEBUG=1 in env
