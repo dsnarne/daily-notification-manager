@@ -166,7 +166,7 @@ Remember: When uncertain, err on the side of showing rather than hiding, but use
                 ),
                 "communication": StdioServerParameters(
                     command="python",
-                    args=["mcp-servers/communication-server/server.py"]
+                    args=["mcp_servers/communication_server/server.py"]
                 ),
                 "projects": StdioServerParameters(
                     command="python",
