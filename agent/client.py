@@ -60,58 +60,35 @@ class NotificationAgent:
         
     async def initialize_mcp_servers(self):
         """Initialize MCP server connections"""
-        try:
-            servers = {
-                #TODO: IMPLEMENT OTHER SERVERS
-                # "calendar": StdioServerParameters(
-                #     command="python",
-                #     args=["mcp-servers/calendar-server/server.py"]
-                # ),
-                "communication": StdioServerParameters(
-                    command="python",
-                    args=["-m", "mcp_servers.communication_server.server"]
-                )
-                # "projects": StdioServerParameters(
-                #     command="python",
-                #     args=["mcp-servers/project-server/server.py"]
-                # ),
-                # "user_context": StdioServerParameters(
-                #     command="python",
-                #     args=["mcp-servers/user-context-server/server.py"]
-                # )
-            }
-            
-            # Initialize connections
-            for name, params in servers.items():
-                try:
-                    session_cm = stdio_client(params)
-                    session = await session_cm.__aenter__()
-                    self.mcp_sessions[name] = session
-                    logger.info(f"Initialized MCP server: {name}")
-                except Exception as e:
-                    logger.error(f"Failed to initialize {name} server: {e}")
-                    # Continue without this server
-                    
-        except Exception as e:
-            logger.error(f"Error initializing MCP servers: {e}")
-            raise
+        # Store server parameters for on-demand connections
+        self.server_params = {
+            "communication": StdioServerParameters(
+                command="python",
+                args=["-m", "mcp_servers.communication_server.server"]
+            )
+        }
+        logger.info("MCP server parameters configured")
     
     async def get_available_tools(self) -> List[Dict[str, Any]]:
         """Get all available tools from MCP servers"""
         all_tools = []
         
-        for server_name, session in self.mcp_sessions.items():
+        for server_name, params in self.server_params.items():
             try:
-                tools_response = await session.list_tools()
-                for tool in tools_response.tools:
-                    # Add server name to tool for routing
-                    tool_dict = {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "input_schema": tool.inputSchema,
-                        "_server": server_name  # Internal routing info
-                    }
-                    all_tools.append(tool_dict)
+                async with stdio_client(params) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        
+                        tools_response = await session.list_tools()
+                        for tool in tools_response.tools:
+                            # Add server name to tool for routing
+                            tool_dict = {
+                                "name": tool.name,
+                                "description": tool.description,
+                                "input_schema": tool.inputSchema,
+                                "_server": server_name  # Internal routing info
+                            }
+                            all_tools.append(tool_dict)
             except Exception as e:
                 logger.error(f"Error getting tools from {server_name}: {e}")
                 
@@ -143,13 +120,17 @@ class NotificationAgent:
                 server_name = tool["_server"]
                 break
         
-        if not server_name or server_name not in self.mcp_sessions:
+        if not server_name or server_name not in self.server_params:
             raise ValueError(f"Tool {tool_name} not found or server not available")
         
         try:
-            session = self.mcp_sessions[server_name]
-            result = await session.call_tool(tool_name, arguments)
-            return result.content[0].text
+            params = self.server_params[server_name]
+            async with stdio_client(params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    
+                    result = await session.call_tool(tool_name, arguments)
+                    return result.content[0].text
         except Exception as e:
             logger.error(f"Error calling tool {tool_name}: {e}")
             return json.dumps({"error": str(e)})
@@ -198,18 +179,36 @@ Use available tools to gather context as needed, then provide your structured de
                 }
             ]
             
-            # Make initial request with tools
-            response = await self.anthropic.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=4000,
-                system=self.system_prompt,
-                messages=messages,
-                tools=await self.get_claude_tools_format(),
-                tool_choice="auto"
-            )
+            # Get available tools
+            available_tools = await self.get_claude_tools_format()
+            
+            # Make initial request with tools (only if tools are available)
+            if available_tools:
+                response = self.anthropic.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=4000,
+                    system=self.system_prompt,
+                    messages=messages,
+                    tools=available_tools,
+                    tool_choice={"type": "auto"}
+                )
+            else:
+                # No tools available, make request without tools
+                logger.warning("No MCP tools available, proceeding without tool support")
+                response = self.anthropic.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=4000,
+                    system=self.system_prompt,
+                    messages=messages
+                )
             
             # Handle tool calls and get final decisions
             final_response = await self.handle_tool_calls_conversation(response, messages)
+            
+            # Debug: Log the actual response
+            logger.info(f"Claude response length: {len(final_response)}")
+            logger.info(f"Claude response (first 500): {final_response[:500]}...")
+            logger.info(f"Claude response (last 500): ...{final_response[-500:]}")
             
             # Parse the final response
             result = self.parse_response(final_response)
@@ -232,24 +231,45 @@ Use available tools to gather context as needed, then provide your structured de
     async def handle_tool_calls_conversation(self, response, messages: List[Dict[str, Any]]) -> str:
         """Handle the conversation flow with tool calls"""
         
-        # Check if response has tool calls
-        if hasattr(response, 'content') and response.content:
-            content_block = response.content[0]
+        # Process the response and continue conversation until we get final text
+        while True:
+            if not (hasattr(response, 'content') and response.content):
+                return ""
             
-            # If it's a tool use, handle the tool calls
-            if hasattr(content_block, 'type') and content_block.type == "tool_use":
-                # Add assistant message with tool call
+            # Check if we have tool calls to execute
+            has_tool_calls = any(
+                hasattr(block, 'type') and block.type == "tool_use"
+                for block in response.content
+            )
+            
+            if has_tool_calls:
+                logger.info("Processing tool calls...")
+                
+                # Add assistant message with ALL content blocks (text + tool calls)
+                assistant_content = []
+                for block in response.content:
+                    if hasattr(block, 'type'):
+                        if block.type == "text":
+                            assistant_content.append({"type": "text", "text": block.text})
+                        elif block.type == "tool_use":
+                            assistant_content.append({
+                                "type": "tool_use",
+                                "id": block.id,
+                                "name": block.name,
+                                "input": block.input
+                            })
+                
                 messages.append({
-                    "role": "assistant", 
-                    "content": [content_block]
+                    "role": "assistant",
+                    "content": assistant_content
                 })
                 
-                # Execute tool calls
+                # Execute all tool calls
                 tool_results = []
                 for block in response.content:
                     if hasattr(block, 'type') and block.type == "tool_use":
                         try:
-                            # Execute the tool call
+                            logger.info(f"Executing tool: {block.name} with args: {block.input}")
                             result = await self.call_mcp_tool(block.name, block.input)
                             
                             tool_results.append({
@@ -259,10 +279,11 @@ Use available tools to gather context as needed, then provide your structured de
                             })
                             
                         except Exception as e:
+                            logger.error(f"Tool call failed: {e}")
                             tool_results.append({
                                 "type": "tool_result",
                                 "tool_use_id": block.id,
-                                "content": f"Error: {str(e)}"
+                                "content": f"Error executing tool: {str(e)}"
                             })
                 
                 # Add tool results to conversation
@@ -272,33 +293,58 @@ Use available tools to gather context as needed, then provide your structured de
                 })
                 
                 # Continue conversation with tool results
-                follow_up = await self.anthropic.messages.create(
-                    model="claude-3-5-sonnet-20241022",
-                    max_tokens=4000,
-                    system=self.system_prompt,
-                    messages=messages,
-                    tools=await self.get_claude_tools_format()
-                )
-                
-                # Recursively handle if more tool calls needed
-                if (hasattr(follow_up, 'content') and follow_up.content and
-                    hasattr(follow_up.content[0], 'type') and 
-                    follow_up.content[0].type == "tool_use"):
-                    return await self.handle_tool_calls_conversation(follow_up, messages)
+                available_tools = await self.get_claude_tools_format()
+                if available_tools:
+                    response = self.anthropic.messages.create(
+                        model="claude-sonnet-4-20250514",
+                        max_tokens=4000,
+                        system=self.system_prompt,
+                        messages=messages,
+                        tools=available_tools
+                    )
                 else:
-                    return follow_up.content[0].text if follow_up.content else ""
-            
-            # If it's just text, return it
-            elif hasattr(content_block, 'text'):
-                return content_block.text
+                    response = self.anthropic.messages.create(
+                        model="claude-sonnet-4-20250514",
+                        max_tokens=4000,
+                        system=self.system_prompt,
+                        messages=messages
+                    )
+                
+                # Continue loop to process the new response
+                
+            else:
+                # No more tool calls, extract final text response
+                final_text = ""
+                for block in response.content:
+                    if hasattr(block, 'type') and block.type == "text":
+                        final_text += block.text
+                    elif hasattr(block, 'text'):  # Direct text attribute
+                        final_text += block.text
+                
+                return final_text
         
         return ""
     
     def parse_response(self, response_text: str) -> ProcessingResult:
         """Parse Claude's response into structured result"""
         try:
-            # Try to extract JSON from response
-            response_data = json.loads(response_text)
+            # Try to extract JSON from response - handle markdown code blocks
+            json_text = response_text
+            
+            # Remove markdown code block markers if present
+            if "```json" in response_text:
+                start_marker = response_text.find("```json") + 7
+                end_marker = response_text.rfind("```")
+                if start_marker > 6 and end_marker > start_marker:
+                    json_text = response_text[start_marker:end_marker].strip()
+            else:
+                # Look for JSON object boundaries
+                json_start = response_text.find('{')
+                json_end = response_text.rfind('}') + 1
+                if json_start != -1 and json_end > json_start:
+                    json_text = response_text[json_start:json_end]
+            
+            response_data = json.loads(json_text)
             
             # Parse decisions
             decisions = []
@@ -346,13 +392,8 @@ Use available tools to gather context as needed, then provide your structured de
     
     async def cleanup_mcp_sessions(self):
         """Clean up MCP server connections"""
-        for name, session in self.mcp_sessions.items():
-            try:
-                await session.close()
-            except Exception as e:
-                logger.error(f"Error closing {name} session: {e}")
-        
-        self.mcp_sessions.clear()
+        # No persistent sessions to clean up since we use context managers
+        logger.info("MCP cleanup completed")
 
 # Usage example
 async def main():
