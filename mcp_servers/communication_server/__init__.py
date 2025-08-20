@@ -26,7 +26,7 @@ from .models import (
     DomainInfo
 )
 
-from .integrations.gmail import GmailIntegration
+from .integrations import gmail
 
 __version__ = "0.1.0"
 __author__ = "Your Name"
@@ -37,5 +37,5 @@ __all__ = [
     "SenderImportance", 
     "ConversationMessage",
     "DomainInfo",
-    "GmailIntegration"
+    "gmail"
 ]

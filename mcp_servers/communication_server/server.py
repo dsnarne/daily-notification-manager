@@ -1,126 +1,225 @@
-# services/mcp_gmail/server.py
-import sys, json, traceback
-from typing import Any, Dict, Optional, List
+# mcp-servers/communication-server/server.py
+import asyncio
+import json
+import logging
+from typing import Dict, List, Any
+from mcp.server import Server
+from mcp.types import Tool, TextContent
+from mcp.server.stdio import stdio_server
+from mcp.server.models import InitializationOptions
+from mcp.server.lowlevel import NotificationOptions
 
-from mcp_servers.communication_server.schemas import Notification
-from mcp_servers.communication_server.gmail_api import list_gmail_notifications
-import os
+from .models import Notification, ListNotificationsArgs
+from .integrations.gmail import GmailIntegration
 
-# Enable debug logging when MCP_DEBUG=1 in env
-DEBUG = os.getenv("MCP_DEBUG", "0") == "1"
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def log(*a):
-    if DEBUG:
-        print(*a, file=sys.stderr, flush=True)
+# Initialize MCP server
+print("🚀 Starting MCP Communication Server...")
+server = Server("communication-server")
+print("✅ MCP Server instance created")
 
-def send(obj: Dict[str, Any]) -> None:
-    sys.stdout.write(json.dumps(obj) + "\n")
-    sys.stdout.flush()
+# Initialize integrations
+print("🔧 Initializing Gmail integration...")
+gmail_integration = GmailIntegration()
+print("✅ Gmail integration initialized")
 
-def send_result(rid: Any, result: Any) -> None:
-    if rid is None:
-        return  # never respond to notifications
-    send({"jsonrpc": "2.0", "id": rid, "result": result})
 
-def send_error(rid: Any, code: int, message: str, data: Optional[Dict[str, Any]] = None) -> None:
-    if rid is None:
-        return  # never respond to notifications
-    err = {"code": code, "message": message}
-    if data is not None:
-        err["data"] = data
-    send({"jsonrpc": "2.0", "id": rid, "error": err})
+@server.list_tools()
+async def list_tools() -> List[Tool]:
+    """List available tools for communication platforms"""
+    print("📋 Client requested tool list")
+    return [
+        Tool(
+            name="list_gmail_notifications",
+            description="List recent Gmail notifications from INBOX with optional filters",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "since": {
+                        "type": "string",
+                        "description": "ISO-8601 timestamp to filter notifications since this date"
+                    },
+                    "query": {
+                        "type": "string", 
+                        "description": "Gmail search query (e.g., 'from:example@company.com')"
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of notifications to return",
+                        "default": 20
+                    }
+                },
+                "required": []
+            }
+        ),
+        Tool(
+            name="analyze_sender_importance",
+            description="Analyze the importance of an email sender based on communication history",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "sender_email": {
+                        "type": "string",
+                        "description": "Email address of the sender to analyze"
+                    },
+                    "days_back": {
+                        "type": "integer", 
+                        "description": "Number of days to look back for analysis",
+                        "default": 30
+                    }
+                },
+                "required": ["sender_email"]
+            }
+        ),
+        Tool(
+            name="get_recent_conversations",
+            description="Get recent conversation history with a specific contact",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "contact_email": {
+                        "type": "string",
+                        "description": "Email address of the contact"
+                    },
+                    "days_back": {
+                        "type": "integer",
+                        "description": "Number of days to look back",
+                        "default": 7
+                    },
+                    "max_messages": {
+                        "type": "integer",
+                        "description": "Maximum number of messages to return",
+                        "default": 10
+                    }
+                },
+                "required": ["contact_email"]
+            }
+        ),
+        Tool(
+            name="check_sender_domain",
+            description="Check if sender is from company domain or external",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "sender_email": {
+                        "type": "string",
+                        "description": "Email address to check domain for"
+                    }
+                },
+                "required": ["sender_email"]
+            }
+        )
+    ]
 
-TOOL_DEF = {
-    "name": "list_notifications",
-    "description": "List recent Gmail notifications (INBOX). Optional filters: since ISO-8601, Gmail query.",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "since": {"type": "string"},
-            "query": {"type": "string"}
-        },
-        "required": []
-    }
-}
-
-def handle_list_notifications(args: Dict[str, Any]) -> List[Dict[str, Any]]:
-    items = list_gmail_notifications(args.get("since"), args.get("query"))
-    return [Notification(**x).model_dump() for x in items]
-
-for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    req = None
+@server.call_tool()
+async def call_tool(name: str, arguments: dict) -> List[TextContent]:
+    """Handle tool calls"""
+    print(f"🔧 Client called tool: {name} with args: {arguments}")
     try:
-        req = json.loads(line)
-        log("RAW REQUEST:", line)
-        log("PARSED REQUEST:", req)
-
-        # Basic JSON-RPC sanity
-        if req.get("jsonrpc") != "2.0":
-            # ignore garbage / non-JSON-RPC lines
-            continue
-
-        rid = req.get("id")  # may be None (notification)
-        method = req.get("method")
-        params = req.get("params") or {}
-
-        # Some MCP clients may send notifications; ignore them silently
-        if method is None:
-            # If it's a response we didn't ask for (shouldn't happen), or a malformed notification — ignore
-            continue
-
-        if method == "initialize":
-            send_result(rid, {
-                "protocolVersion": params.get("protocolVersion", "2025-06-18"),
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": "mcp-gmail", "version": "0.1.0"},
-            })
-            continue
-
-        if method == "tools/list":
-            send_result(rid, {"tools": [TOOL_DEF]})
-            continue
-
-        if method == "tools/call":
-            name = params.get("name")
-            arguments = params.get("arguments") or {}
-            log(f"TOOLS/CALL name={name} args={arguments}")
-            if name == "list_notifications":
-                if name == "list_notifications":
-                    try:
-                        items = handle_list_notifications(arguments)
-                        payload = [Notification(**x).model_dump(mode="json") for x in items]
-                        log(f"TOOL RESULT COUNT: {len(payload)}")
-                        send_result(rid, {
-                            "content": [
-                                {"type": "text", "text": json.dumps(payload, ensure_ascii=False)}
-                            ]
-                        })
-                    except Exception as e:
-                        log("TOOLS/CALL ERROR:", repr(e))
-                        log(traceback.format_exc())
-                        send_error(rid, -32603, "Internal error", {
-                            "exception": str(e),
-                            "trace": traceback.format_exc(),
-                            "arguments": arguments,
-                        })
-            else:
-                send_error(rid, -32601, f"Unknown tool: {name}")
-            continue
-
-        # optional niceties some clients use
-        if method in ("ping", "notifications/subscribe"):
-            send_result(rid, {})  # ack
-            continue
-
-        # Unknown method
-        send_error(rid, -32601, f"Unknown method: {method}")
-
+        if name == "list_gmail_notifications":
+            # Validate arguments
+            args = ListNotificationsArgs(**arguments)
+            max_results = arguments.get("max_results", 20)
+            
+            # Get notifications from Gmail
+            notifications_data = await gmail_integration.list_notifications(
+                since_iso=args.since,
+                query=args.query,
+                max_results=max_results
+            )
+            
+            # Convert to Notification models
+            notifications = []
+            for data in notifications_data:
+                notification = Notification(**data)
+                notifications.append(notification.model_dump())
+            
+            logger.info(f"Retrieved {len(notifications)} Gmail notifications")
+            
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "count": len(notifications),
+                    "notifications": notifications
+                }, ensure_ascii=False)
+            )]
+            
+        elif name == "analyze_sender_importance":
+            sender_email = arguments["sender_email"]
+            days_back = arguments.get("days_back", 30)
+            
+            importance_data = await gmail_integration.analyze_sender_importance(
+                sender_email, days_back
+            )
+            
+            return [TextContent(
+                type="text",
+                text=json.dumps(importance_data, ensure_ascii=False)
+            )]
+            
+        elif name == "get_recent_conversations":
+            contact_email = arguments["contact_email"]
+            days_back = arguments.get("days_back", 7)
+            max_messages = arguments.get("max_messages", 10)
+            
+            conversations = await gmail_integration.get_recent_conversations(
+                contact_email, days_back, max_messages
+            )
+            
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "contact": contact_email,
+                    "conversations": conversations
+                }, ensure_ascii=False)
+            )]
+            
+        elif name == "check_sender_domain":
+            sender_email = arguments["sender_email"]
+            domain_info = await gmail_integration.check_sender_domain(sender_email)
+            
+            return [TextContent(
+                type="text",
+                text=json.dumps(domain_info, ensure_ascii=False)
+            )]
+            
+        else:
+            raise ValueError(f"Unknown tool: {name}")
+            
     except Exception as e:
-        # Only respond if there was an id; otherwise, swallow
-        send_error((req or {}).get("id"), -32603, "Internal error", {
-            "exception": str(e),
-            "trace": traceback.format_exc(),
-        })
+        logger.error(f"Error calling tool {name}: {e}")
+        return [TextContent(
+            type="text",
+            text=json.dumps({
+                "error": str(e),
+                "tool": name,
+                "arguments": arguments
+            })
+        )]
+
+async def run():
+    """Run the server with lifespan management."""
+    print("🌐 Starting stdio server...")
+    
+    async with stdio_server() as (read_stream, write_stream):
+        print("📡 MCP Server running and listening for client connections...")
+        print("💡 Server is ready to process requests!")
+        print("⏳ Waiting for MCP client to connect...")
+        await server.run(
+            read_stream,
+            write_stream,
+            InitializationOptions(
+                server_name="communication-server",
+                server_version="0.1.0",
+                capabilities=server.get_capabilities(
+                    notification_options=NotificationOptions(),
+                    experimental_capabilities={},
+                ),
+            ),
+        )
+
+if __name__ == "__main__":
+    asyncio.run(run())

@@ -321,7 +321,7 @@ def demo():
     
     # Import and run the test script
     try:
-        from test_integrations import main
+        from tests.test_integrations import main
         asyncio.run(main())
         click.echo("\n✅ Demo completed successfully!")
     except Exception as e:
