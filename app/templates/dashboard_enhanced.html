@@ -465,15 +465,83 @@
                     <h3><i class="fas fa-filter"></i> Active Rules</h3>
                     <div id="activeRules"></div>
                 </div>
+
+                <!-- Preferences -->
+                <div class="sidebar-section">
+                    <h3><i class="fas fa-sliders-h"></i> Preferences</h3>
+                    <form id="prefsForm" onsubmit="return savePrefs(event)">
+                        <div style="margin-bottom:10px; font-weight:600;">Priority Levels</div>
+                        <div style="display:grid; grid-template-columns: 1fr 120px; gap:8px; align-items:center;">
+                            <label>Message</label>
+                            <select id="pref_message">
+                                <option>low</option><option selected>medium</option><option>high</option><option>urgent</option>
+                            </select>
+                            <label>Mention</label>
+                            <select id="pref_mention">
+                                <option>low</option><option>medium</option><option selected>high</option><option>urgent</option>
+                            </select>
+                            <label>Alert</label>
+                            <select id="pref_alert">
+                                <option>low</option><option>medium</option><option selected>high</option><option>urgent</option>
+                            </select>
+                            <label>Task</label>
+                            <select id="pref_task">
+                                <option>low</option><option selected>medium</option><option>high</option><option>urgent</option>
+                            </select>
+                            <label>Reminder</label>
+                            <select id="pref_reminder">
+                                <option selected>low</option><option>medium</option><option>high</option><option>urgent</option>
+                            </select>
+                        </div>
+                        <div style="margin:12px 0 8px; font-weight:600;">Quiet Hours</div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                            <label><input type="checkbox" id="qh_enabled"> Enable</label>
+                            <div></div>
+                            <input id="qh_start" type="time" value="22:00">
+                            <input id="qh_end" type="time" value="08:00">
+                        </div>
+                        <div style="margin:12px 0 8px; font-weight:600;">Filters</div>
+                        <div>
+                            <label style="display:block; margin-bottom:4px;">Keywords (comma separated)</label>
+                            <input id="f_keywords" style="width:100%; padding:8px;" placeholder="security, alert, action required">
+                            <label style="display:block; margin:8px 0 4px;">Exclude Keywords</label>
+                            <input id="f_exkeywords" style="width:100%; padding:8px;" placeholder="newsletter, promo">
+                            <label style="display:block; margin:8px 0 4px;">Senders</label>
+                            <input id="f_senders" style="width:100%; padding:8px;" placeholder="boss@company.com, ceo@company.com">
+                            <label style="display:block; margin:8px 0 4px;">Channels</label>
+                            <input id="f_channels" style="width:100%; padding:8px;" placeholder="#urgent, #announcements">
+                        </div>
+                        <div style="margin-top:12px; text-align:right;">
+                            <button class="btn btn-sm" type="submit"><i class="fas fa-save"></i> Save</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
 
-        <!-- Rules Section -->
+        <!-- Assistant Console -->
         <div class="content-section">
             <h2 class="section-title">
-                <i class="fas fa-cogs"></i> Notification Rules & Automation
+                <i class="fas fa-terminal"></i> Assistant
             </h2>
-            <div id="rulesList"></div>
+            <div style="margin-bottom:12px; color:#666;">
+                Type a command or use quick actions. Examples:
+                <code>tool: slack_list_channels args: {}</code>
+                or
+                <code>create rule {"name":"Urgent Emails","priority":1}</code>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+                <button class="btn btn-sm" onclick="runAssistantTool('list_notifications', {max_results: 10})"><i class="fas fa-envelope"></i> List Gmail</button>
+                <button class="btn btn-sm" onclick="runAssistantTool('slack_list_channels', {})"><i class="fas fa-hashtag"></i> Slack Channels</button>
+                <input id="quick_channel" placeholder="Channel ID" style="padding:8px; border:1px solid #ddd; border-radius:8px;">
+                <button class="btn btn-sm" onclick="runAssistantSlackMessages()"><i class="fas fa-comments"></i> Channel Messages</button>
+                <button class="btn btn-sm" onclick="insertSampleRule()"><i class="fas fa-magic"></i> Sample Rule</button>
+            </div>
+            <textarea id="assistantInput" rows="4" style="width:100%; padding:12px; border-radius:8px; border:1px solid #ddd; font-family: monospace;"></textarea>
+            <div style="margin-top:10px; text-align:right;">
+                <button class="btn btn-sm" onclick="runAssistant()"><i class="fas fa-play"></i> Run</button>
+            </div>
+            <pre id="assistantOutput" style="background:#f8f9fa; padding:12px; border-radius:8px; margin-top:10px; max-height:240px; overflow:auto;"></pre>
         </div>
     </div>
 
@@ -613,14 +681,67 @@
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
             refreshDemo();
+            startEventStream();
         });
 
-        function refreshDemo() {
+        async function refreshDemo() {
+            // Load from MCP endpoints
+            await Promise.all([
+                loadMCPGmail(),
+                loadMCPSlack()
+            ]);
             displayNotifications();
             displayPriorityChart();
             displayIntegrationStatus();
             displayRules();
+            loadPrefs();
             updateStats();
+        }
+
+        async function loadMCPGmail() {
+            try {
+                const resp = await fetch('/api/mcp/gmail/notifications?max_results=10');
+                const items = await resp.json();
+                if (Array.isArray(items)) {
+                    const mapped = items.map(n => ({
+                        id: n.id || Math.random().toString(36).slice(2),
+                        title: n.title || 'Email',
+                        content: n.content || '',
+                        platform: 'email',
+                        priority: n.priority || 'medium',
+                        sender: n.sender || 'unknown',
+                        time: new Date(n.created_at || Date.now()).toLocaleString(),
+                        unread: true
+                    }));
+                    // Merge at top
+                    demoNotifications = [...mapped, ...demoNotifications].slice(0, 50);
+                }
+            } catch (e) { console.error('loadMCPGmail error', e); }
+        }
+
+        async function loadMCPSlack() {
+            try {
+                const channelsResp = await fetch('/api/mcp/slack/channels');
+                const channels = await channelsResp.json();
+                if (Array.isArray(channels) && channels.length) {
+                    const channelId = channels[0].id || channels[0].channel?.id || channels[0];
+                    const msgsResp = await fetch(`/api/mcp/slack/channels/${channelId}/messages?limit=10`);
+                    const msgs = await msgsResp.json();
+                    if (Array.isArray(msgs)) {
+                        const mapped = msgs.map(n => ({
+                            id: n.id || Math.random().toString(36).slice(2),
+                            title: n.title || 'Slack Message',
+                            content: n.content || '',
+                            platform: 'slack',
+                            priority: n.priority || 'medium',
+                            sender: n.sender || 'unknown',
+                            time: new Date(n.created_at || Date.now()).toLocaleString(),
+                            unread: true
+                        }));
+                        demoNotifications = [...mapped, ...demoNotifications].slice(0, 50);
+                    }
+                }
+            } catch (e) { console.error('loadMCPSlack error', e); }
         }
 
         function displayNotifications() {
@@ -757,6 +878,44 @@
             }
         }
 
+        async function runAssistant() {
+            const input = document.getElementById('assistantInput')?.value || '';
+            const out = document.getElementById('assistantOutput');
+            if (!out) return;
+            out.textContent = 'Running...';
+            try {
+                const resp = await fetch('/api/assistant/run', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: input})});
+                const data = await resp.json();
+                out.textContent = JSON.stringify(data, null, 2);
+                if (resp.ok && data && data.action === 'create_rule') {
+                    demoRules.push({ id: Date.now(), name: data.input?.name || 'New Rule', priority: data.input?.priority || 'medium', platform: data.input?.platform || 'all', conditions: data.input?.conditions || {} });
+                    displayRules();
+                }
+            } catch (e) {
+                out.textContent = 'Error: ' + e;
+            }
+        }
+
+        function insertSampleRule() {
+            const sample = 'create rule {"name":"Boss Emails","priority":1,"platform":"email","conditions":[{"field":"sender","operator":"contains","value":"ceo@company.com"}]}'
+            document.getElementById('assistantInput').value = sample;
+        }
+
+        function runAssistantTool(name, args) {
+            const cmd = `tool: ${name} args: ${JSON.stringify(args)}`;
+            document.getElementById('assistantInput').value = cmd;
+            runAssistant();
+        }
+
+        function runAssistantSlackMessages() {
+            const channel = document.getElementById('quick_channel').value.trim();
+            if (!channel) {
+                showToast('Enter channel ID', 'warning');
+                return;
+            }
+            runAssistantTool('slack_list_channel_messages', {channel_id: channel, limit: 10});
+        }
+
         function toggleRuleSystem() {
             demoRules.forEach(rule => {
                 rule.active = !rule.active;
@@ -825,6 +984,90 @@
                 refreshDemo();
             }
         }, 30000);
+
+        async function loadPrefs() {
+            try {
+                const resp = await fetch('/api/preferences');
+                const data = await resp.json();
+                const p = data.priority_levels || {};
+                document.getElementById('pref_message').value = (p.message || 'medium').toLowerCase();
+                document.getElementById('pref_mention').value = (p.mention || 'high').toLowerCase();
+                document.getElementById('pref_alert').value = (p.alert || 'high').toLowerCase();
+                document.getElementById('pref_task').value = (p.task || 'medium').toLowerCase();
+                document.getElementById('pref_reminder').value = (p.reminder || 'low').toLowerCase();
+                const qh = data.quiet_hours || {};
+                document.getElementById('qh_enabled').checked = !!qh.enabled;
+                document.getElementById('qh_start').value = qh.start_time || '22:00';
+                document.getElementById('qh_end').value = qh.end_time || '08:00';
+                const f = data.filters || {};
+                document.getElementById('f_keywords').value = (f.keywords || []).join(', ');
+                document.getElementById('f_exkeywords').value = (f.exclude_keywords || []).join(', ');
+                document.getElementById('f_senders').value = (f.senders || []).join(', ');
+                document.getElementById('f_channels').value = (f.channels || []).join(', ');
+            } catch (e) { console.error('loadPrefs error', e); }
+        }
+
+        async function savePrefs(ev) {
+            ev.preventDefault();
+            const toList = (v) => v.split(',').map(s => s.trim()).filter(Boolean);
+            const body = {
+                priority_levels: {
+                    message: document.getElementById('pref_message').value,
+                    mention: document.getElementById('pref_mention').value,
+                    alert: document.getElementById('pref_alert').value,
+                    task: document.getElementById('pref_task').value,
+                    reminder: document.getElementById('pref_reminder').value,
+                },
+                quiet_hours: {
+                    enabled: document.getElementById('qh_enabled').checked,
+                    start_time: document.getElementById('qh_start').value,
+                    end_time: document.getElementById('qh_end').value,
+                    timezone: 'UTC',
+                },
+                filters: {
+                    keywords: toList(document.getElementById('f_keywords').value),
+                    exclude_keywords: toList(document.getElementById('f_exkeywords').value),
+                    senders: toList(document.getElementById('f_senders').value),
+                    channels: toList(document.getElementById('f_channels').value),
+                }
+            };
+            try {
+                await fetch('/api/preferences', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+                showToast('Preferences saved', 'success');
+            } catch (e) {
+                showToast('Failed to save preferences', 'error');
+            }
+            return false;
+        }
+
+        function startEventStream() {
+            try {
+                const es = new EventSource('/api/mcp/stream');
+                es.onmessage = (ev) => {
+                    try {
+                        const data = JSON.parse(ev.data);
+                        const n = data.notification || {};
+                        const platform = data.source || n.platform || 'email';
+                        const item = {
+                            id: n.id || Math.random().toString(36).slice(2),
+                            title: n.title || (platform === 'slack' ? 'Slack Message' : 'Email'),
+                            content: n.content || '',
+                            platform: platform,
+                            priority: n.priority || 'medium',
+                            sender: n.sender || 'unknown',
+                            time: new Date(n.created_at || Date.now()).toLocaleString(),
+                            unread: true
+                        };
+                        demoNotifications.unshift(item);
+                        demoNotifications = demoNotifications.slice(0, 100);
+                        displayNotifications();
+                        displayPriorityChart();
+                        updateStats();
+                    } catch (e) { console.error('es parse', e); }
+                };
+                es.addEventListener('error', (e) => console.warn('event stream error', e));
+            } catch (e) { console.error('startEventStream error', e); }
+        }
     </script>
 </body>
 </html> 

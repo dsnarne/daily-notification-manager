@@ -20,6 +20,7 @@ from app.services.notification_service import NotificationService
 from app.services.user_service import UserService
 from app.core.database import get_db
 from app.models.schemas import IntegrationCreate, IntegrationUpdate, NotificationRuleCreate, NotificationRuleUpdate
+from app.api.v1.api import api_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +37,8 @@ app = FastAPI(
 
 # Templates
 templates = Jinja2Templates(directory="app/templates")
+# Mount API router under /api
+app.include_router(api_router, prefix="/api")
 
 # Add CORS middleware
 app.add_middleware(
