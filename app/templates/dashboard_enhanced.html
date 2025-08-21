@@ -721,14 +721,10 @@
 
         async function loadMCPSlack() {
             try {
-                const channelsResp = await fetch('/api/mcp/slack/channels');
-                const channels = await channelsResp.json();
-                if (Array.isArray(channels) && channels.length) {
-                    const channelId = channels[0].id || channels[0].channel?.id || channels[0];
-                    const msgsResp = await fetch(`/api/mcp/slack/channels/${channelId}/messages?limit=10`);
-                    const msgs = await msgsResp.json();
-                    if (Array.isArray(msgs)) {
-                        const mapped = msgs.map(n => ({
+                const resp = await fetch('/api/mcp/slack/notifications?max_results=10');
+                const items = await resp.json();
+                if (Array.isArray(items)) {
+                    const mapped = items.map(n => ({
                             id: n.id || Math.random().toString(36).slice(2),
                             title: n.title || 'Slack Message',
                             content: n.content || '',
@@ -738,8 +734,7 @@
                             time: new Date(n.created_at || Date.now()).toLocaleString(),
                             unread: true
                         }));
-                        demoNotifications = [...mapped, ...demoNotifications].slice(0, 50);
-                    }
+                    demoNotifications = [...mapped, ...demoNotifications].slice(0, 50);
                 }
             } catch (e) { console.error('loadMCPSlack error', e); }
         }
