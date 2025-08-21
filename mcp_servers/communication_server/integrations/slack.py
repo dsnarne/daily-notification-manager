@@ -18,7 +18,7 @@ except ImportError:
     from mcp_servers.communication_server.models import SenderImportance, ConversationMessage, DomainInfo, SlackUserInfo, SlackChannelInfo
 
 # Load environment variables
-env_path = Path(__file__).parent.parent / ".env"
+env_path = Path(__file__).parent.parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path, override=True)
 
 class SlackIntegration:
@@ -63,7 +63,7 @@ class SlackIntegration:
             # Get list of channels first
             channels_data = await self._make_api_call("conversations.list", {
                 "types": "public_channel,private_channel,im,mpim",
-                "exclude_archived": True,
+                "exclude_archived": "true",
                 "limit": 100
             })
             

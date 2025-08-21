@@ -21,7 +21,7 @@ except ImportError:
     from mcp_servers.communication_server.models import SenderImportance, ConversationMessage, DomainInfo
 
 # Load environment variables
-env_path = Path(__file__).parent.parent / ".env"
+env_path = Path(__file__).parent.parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path, override=True)
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
