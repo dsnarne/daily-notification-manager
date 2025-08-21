@@ -12,7 +12,13 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from dotenv import load_dotenv
 
-from ..models import SenderImportance, ConversationMessage, DomainInfo
+try:
+    from ..models import SenderImportance, ConversationMessage, DomainInfo
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+    from mcp_servers.communication_server.models import SenderImportance, ConversationMessage, DomainInfo
 
 # Load environment variables
 env_path = Path(__file__).parent.parent / ".env"

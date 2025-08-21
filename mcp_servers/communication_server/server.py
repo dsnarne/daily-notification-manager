@@ -9,9 +9,19 @@ from mcp.server.stdio import stdio_server
 from mcp.server.models import InitializationOptions
 from mcp.server.lowlevel import NotificationOptions
 
-from .models import Notification, ListNotificationsArgs, SlackListNotificationsArgs
-from .integrations.gmail import GmailIntegration
-from .integrations.slack import SlackIntegration
+try:
+    # Try relative imports first (when run as module)
+    from .models import Notification, ListNotificationsArgs, SlackListNotificationsArgs
+    from .integrations.gmail import GmailIntegration
+    from .integrations.slack import SlackIntegration
+except ImportError:
+    # Fall back to absolute imports (when run directly)
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).parent.parent.parent))
+    from mcp_servers.communication_server.models import Notification, ListNotificationsArgs, SlackListNotificationsArgs
+    from mcp_servers.communication_server.integrations.gmail import GmailIntegration
+    from mcp_servers.communication_server.integrations.slack import SlackIntegration
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

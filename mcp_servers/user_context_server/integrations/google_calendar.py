@@ -9,11 +9,21 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from dotenv import load_dotenv
 
-from ..models import (
-    CalendarEvent, Calendar, FreeBusyQuery, FreeBusyResponse,
-    EventFilters, CreateEventRequest, UpdateEventRequest, EventConflict,
-    AvailabilitySlot
-)
+try:
+    from ..models import (
+        CalendarEvent, Calendar, FreeBusyQuery, FreeBusyResponse,
+        EventFilters, CreateEventRequest, UpdateEventRequest, EventConflict,
+        AvailabilitySlot
+    )
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+    from mcp_servers.user_context_server.models import (
+        CalendarEvent, Calendar, FreeBusyQuery, FreeBusyResponse,
+        EventFilters, CreateEventRequest, UpdateEventRequest, EventConflict,
+        AvailabilitySlot
+    )
 
 env_path = Path(__file__).parent.parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path, override=True)

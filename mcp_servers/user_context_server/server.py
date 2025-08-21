@@ -9,11 +9,23 @@ from mcp.server.stdio import stdio_server
 from mcp.server.models import InitializationOptions
 from mcp.server.lowlevel import NotificationOptions
 
-from .models import (
-    CalendarEvent, Calendar, EventFilters, CreateEventRequest, 
-    UpdateEventRequest, FreeBusyQuery, EventConflict, AvailabilitySlot
-)
-from .integrations.google_calendar import GoogleCalendarIntegration
+try:
+    # Try relative imports first (when run as module)
+    from .models import (
+        CalendarEvent, Calendar, EventFilters, CreateEventRequest, 
+        UpdateEventRequest, FreeBusyQuery, EventConflict, AvailabilitySlot
+    )
+    from .integrations.google_calendar import GoogleCalendarIntegration
+except ImportError:
+    # Fall back to absolute imports (when run directly)
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).parent.parent.parent))
+    from mcp_servers.user_context_server.models import (
+        CalendarEvent, Calendar, EventFilters, CreateEventRequest, 
+        UpdateEventRequest, FreeBusyQuery, EventConflict, AvailabilitySlot
+    )
+    from mcp_servers.user_context_server.integrations.google_calendar import GoogleCalendarIntegration
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

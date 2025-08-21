@@ -9,7 +9,13 @@ from collections import defaultdict, Counter
 
 from dotenv import load_dotenv
 
-from ..models import SenderImportance, ConversationMessage, DomainInfo
+try:
+    from ..models import SenderImportance, ConversationMessage, DomainInfo, SlackUserInfo, SlackChannelInfo
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+    from mcp_servers.communication_server.models import SenderImportance, ConversationMessage, DomainInfo, SlackUserInfo, SlackChannelInfo
 
 # Load environment variables
 env_path = Path(__file__).parent.parent / ".env"
