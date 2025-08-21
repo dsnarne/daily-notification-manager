@@ -35,12 +35,7 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Templates
-templates = Jinja2Templates(directory="app/templates")
-# Mount API router under /api
-app.include_router(api_router, prefix="/api")
-
-# Add CORS middleware
+# Add CORS middleware (must be added before routers)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Configure appropriately for production
@@ -48,6 +43,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Templates
+templates = Jinja2Templates(directory="app/templates")
+# Mount API router under /api
+app.include_router(api_router, prefix="/api")
 
 # Initialize services (using mock services for now)
 # TODO: Replace with real database services when database is fully implemented

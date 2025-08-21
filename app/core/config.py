@@ -25,6 +25,23 @@ class Settings(BaseSettings):
     secret_key: str = "your-secret-key-here"
     access_token_expire_minutes: int = 30
     
+    # Gmail MCP Server settings
+    gmail_server_path: str = ""
+    gmail_client_id: str = ""
+    gmail_client_secret: str = ""
+    gmail_refresh_token: str = ""
+    
+    # Google Calendar settings
+    google_calendar_client_id: str = ""
+    google_calendar_client_secret: str = ""
+    google_calendar_refresh_token: str = ""
+    
+    # Slack settings
+    slack_user_token: str = ""
+    
+    # Anthropic API
+    anthropic_api_key: str = ""
+    
     # Scheduler settings
     notification_check_interval: int = 60  # seconds
     
