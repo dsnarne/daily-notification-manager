@@ -18,10 +18,13 @@ router = APIRouter()
 @router.get("/gmail/notifications")
 async def gmail_notifications(query: str = "", max_results: int = 20):
     try:
-        data = await MCPCommunicationClient.call_tool(
-            "list_notifications", {"query": query, "max_results": max_results}
+        payload = await MCPCommunicationClient.call_tool(
+            "list_gmail_notifications", {"query": query, "max_results": max_results}
         )
-        return data
+        # MCP server returns {count, notifications}
+        if isinstance(payload, dict) and "notifications" in payload:
+            return payload["notifications"]
+        return payload
     except Exception as e:
         logger.error(f"gmail_notifications failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -30,20 +33,22 @@ async def gmail_notifications(query: str = "", max_results: int = 20):
 @router.get("/slack/channels")
 async def slack_channels():
     try:
-        data = await MCPCommunicationClient.call_tool("slack_list_channels", {})
-        return data
+        # Use list_slack_notifications without filters to infer channels is not exposed; return empty for now
+        return []
     except Exception as e:
         logger.error(f"slack_channels failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/slack/channels/{channel_id}/messages")
-async def slack_channel_messages(channel_id: str, limit: int = 50):
+@router.get("/slack/notifications")
+async def slack_notifications(channel_filter: str = "", max_results: int = 20):
     try:
-        data = await MCPCommunicationClient.call_tool(
-            "slack_list_channel_messages", {"channel_id": channel_id, "limit": limit}
+        payload = await MCPCommunicationClient.call_tool(
+            "list_slack_notifications", {"channel_filter": channel_filter, "max_results": max_results}
         )
-        return data
+        if isinstance(payload, dict) and "notifications" in payload:
+            return payload["notifications"]
+        return payload
     except Exception as e:
         logger.error(f"slack_channel_messages failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
