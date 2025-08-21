@@ -144,7 +144,7 @@ class GmailIntegration:
                         "threadId": meta.get("threadId", ""),
                         "internalDate": meta.get("internalDate", "")
                     },
-                    "created_at": created_at,
+                    "created_at": created_at.isoformat() if created_at else None,
                     "link": f"https://mail.google.com/mail/u/0/#inbox/{msg['id']}"
                 }
                 
@@ -363,7 +363,7 @@ class GmailIntegration:
                         "sender": headers.get("from", ""),
                         "recipient": headers.get("to", ""),
                         "content_preview": meta.get("snippet", "")[:200],
-                        "timestamp": timestamp,
+                        "timestamp": timestamp.isoformat() if timestamp else None,
                         "is_reply": bool(headers.get("in-reply-to"))
                     }
                     

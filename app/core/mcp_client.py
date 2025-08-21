@@ -3,130 +3,207 @@ import shlex
 import asyncio
 import json
 import logging
-from typing import Any, Dict, Optional
+import subprocess
+import sys
+from typing import Any, Dict
+from pathlib import Path
+from dotenv import load_dotenv
 
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+# Load environment variables
+env_file = Path(__file__).parent.parent.parent / ".env"
+load_dotenv(env_file)
 
 logger = logging.getLogger(__name__)
 
-class MCPCommunicationClient:
-    """MCP client for the communication server (gmail/slack)."""
 
-    _instance_lock: asyncio.Lock = asyncio.Lock()
-    _tool_lock: asyncio.Lock = asyncio.Lock()  # Separate lock for tool calls
-    _session: Optional[ClientSession] = None
-    _session_context = None
+class MCPCommunicationClient:
+    """MCP client for the communication server (gmail/slack) using raw protocol."""
+
+    _tool_lock: asyncio.Lock = asyncio.Lock()
 
     @staticmethod
-    def _get_params() -> StdioServerParameters:
+    def _get_params():
         # Allow overriding server command via env (e.g., "python -m mcp_servers.communication_server.server")
         override = os.getenv("MCP_COMM_SERVER")
         # Back-compat: accept GMAIL_SERVER_PATH / gmail_server_path pointing directly to a server.py
         if not override:
             direct_path = os.getenv("GMAIL_SERVER_PATH") or os.getenv("gmail_server_path")
             if direct_path:
-                return StdioServerParameters(command="python", args=[direct_path])
+                return [sys.executable, direct_path]
         if override:
             parts = shlex.split(override)
-            cmd = parts[0]
-            args = parts[1:]
-            return StdioServerParameters(command=cmd, args=args)
+            return parts
         # Use module import to avoid relative import issues
-        return StdioServerParameters(command="python", args=["-m", "mcp_servers.communication_server.server"])
-
-    @classmethod
-    async def get_session(cls) -> ClientSession:
-        if cls._session is not None:
-            return cls._session
-        async with cls._instance_lock:
-            if cls._session is None:
-                params = cls._get_params()
-                cls._session_context = stdio_client(params)
-                # stdio_client returns (read_stream, write_stream)
-                read_stream, write_stream = await cls._session_context.__aenter__()
-                cls._session = ClientSession(read_stream, write_stream)
-                await cls._session.initialize()
-                logger.info("MCP communication server session initialized")
-            return cls._session
-
-    @classmethod
-    async def close(cls):
-        """Close the MCP session"""
-        if cls._session_context is not None:
-            await cls._session_context.__aexit__(None, None, None)
-            cls._session = None
-            cls._session_context = None
+        return [sys.executable, "-m", "mcp_servers.communication_server.server"]
 
     @classmethod
     async def call_tool(cls, name: str, arguments: Dict[str, Any]) -> Any:
         async with cls._tool_lock:  # Serialize all tool calls
+            cmd = cls._get_params()
             try:
-                session = await cls.get_session()
-                result = await session.call_tool(name, arguments)
-                try:
-                    if getattr(result, "content", None) and hasattr(result.content[0], "text"):
-                        return json.loads(result.content[0].text)
-                except Exception as e:
-                    logger.error(f"Failed to parse MCP tool result for {name}: {e}")
-                return result
+                # Create process with environment
+                env = os.environ.copy()
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env
+                )
+                
+                # Initialize
+                init_request = {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "daily-client", "version": "1.0"}
+                    }
+                }
+                
+                proc.stdin.write((json.dumps(init_request) + "\n").encode())
+                await proc.stdin.drain()
+                
+                # Read initialize response  
+                init_response = await proc.stdout.readline()
+                if not init_response:
+                    stderr_output = await proc.stderr.read()
+                    raise RuntimeError(f"Server failed to start: {stderr_output.decode()}")
+                
+                # Send initialized notification
+                initialized_notif = {
+                    "jsonrpc": "2.0",
+                    "method": "notifications/initialized",
+                    "params": {}
+                }
+                
+                proc.stdin.write((json.dumps(initialized_notif) + "\n").encode())
+                await proc.stdin.drain()
+                
+                # Call tool
+                call_tool_request = {
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {
+                        "name": name,
+                        "arguments": arguments
+                    }
+                }
+                
+                proc.stdin.write((json.dumps(call_tool_request) + "\n").encode())
+                await proc.stdin.drain()
+                
+                # Read tool response
+                tool_response_raw = await proc.stdout.readline()
+                tool_response = json.loads(tool_response_raw.decode().strip())
+                
+                # Close process
+                proc.stdin.close()
+                await proc.wait()
+                
+                # Parse result
+                if "result" in tool_response and "content" in tool_response["result"]:
+                    content = tool_response["result"]["content"]
+                    if content and len(content) > 0 and "text" in content[0]:
+                        return json.loads(content[0]["text"])
+                
+                return tool_response
+                
             except Exception as e:
                 logger.error(f"MCP call_tool failed for {name}: {e}")
-                # Reset session on error
-                await cls.close()
+                if 'proc' in locals() and proc.returncode is None:
+                    proc.terminate()
+                    await proc.wait()
                 raise
 
 
 class MCPUserContextClient:
-    """MCP client for the user context server (Google Calendar)."""
+    """MCP client for the user context server (Google Calendar) using raw protocol."""
 
-    _instance_lock: asyncio.Lock = asyncio.Lock()
-    _tool_lock: asyncio.Lock = asyncio.Lock()  # Separate lock for tool calls
-    _session: Optional[ClientSession] = None
-    _session_context = None
-
-    @classmethod
-    async def get_session(cls) -> ClientSession:
-        if cls._session is not None:
-            return cls._session
-        async with cls._instance_lock:
-            if cls._session is None:
-                params = StdioServerParameters(
-                    command="python",
-                    args=["-m", "mcp_servers.user_context_server.server"]
-                )
-                cls._session_context = stdio_client(params)
-                # stdio_client returns (read_stream, write_stream)
-                read_stream, write_stream = await cls._session_context.__aenter__()
-                cls._session = ClientSession(read_stream, write_stream)
-                await cls._session.initialize()
-                logger.info("MCP user context server session initialized")
-            return cls._session
-
-    @classmethod
-    async def close(cls):
-        """Close the MCP session"""
-        if cls._session_context is not None:
-            await cls._session_context.__aexit__(None, None, None)
-            cls._session = None
-            cls._session_context = None
+    _tool_lock: asyncio.Lock = asyncio.Lock()
 
     @classmethod
     async def call_tool(cls, name: str, arguments: Dict[str, Any]) -> Any:
         async with cls._tool_lock:  # Serialize all tool calls
+            cmd = [sys.executable, "-m", "mcp_servers.user_context_server.server"]
             try:
-                session = await cls.get_session()
-                result = await session.call_tool(name, arguments)
-                try:
-                    if getattr(result, "content", None) and hasattr(result.content[0], "text"):
-                        return json.loads(result.content[0].text)
-                except Exception as e:
-                    logger.error(f"Failed to parse MCP tool result for {name}: {e}")
-                return result
+                # Create process with environment
+                env = os.environ.copy()
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env
+                )
+                
+                # Initialize
+                init_request = {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "daily-client", "version": "1.0"}
+                    }
+                }
+                
+                proc.stdin.write((json.dumps(init_request) + "\n").encode())
+                await proc.stdin.drain()
+                
+                # Read initialize response  
+                init_response = await proc.stdout.readline()
+                if not init_response:
+                    stderr_output = await proc.stderr.read()
+                    raise RuntimeError(f"Server failed to start: {stderr_output.decode()}")
+                
+                # Send initialized notification
+                initialized_notif = {
+                    "jsonrpc": "2.0",
+                    "method": "notifications/initialized",
+                    "params": {}
+                }
+                
+                proc.stdin.write((json.dumps(initialized_notif) + "\n").encode())
+                await proc.stdin.drain()
+                
+                # Call tool
+                call_tool_request = {
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {
+                        "name": name,
+                        "arguments": arguments
+                    }
+                }
+                
+                proc.stdin.write((json.dumps(call_tool_request) + "\n").encode())
+                await proc.stdin.drain()
+                
+                # Read tool response
+                tool_response_raw = await proc.stdout.readline()
+                tool_response = json.loads(tool_response_raw.decode().strip())
+                
+                # Close process
+                proc.stdin.close()
+                await proc.wait()
+                
+                # Parse result
+                if "result" in tool_response and "content" in tool_response["result"]:
+                    content = tool_response["result"]["content"]
+                    if content and len(content) > 0 and "text" in content[0]:
+                        return json.loads(content[0]["text"])
+                
+                return tool_response
+                
             except Exception as e:
                 logger.error(f"MCP call_tool failed for {name}: {e}")
-                # Reset session on error
-                await cls.close()
+                if 'proc' in locals() and proc.returncode is None:
+                    proc.terminate()
+                    await proc.wait()
                 raise
-
-

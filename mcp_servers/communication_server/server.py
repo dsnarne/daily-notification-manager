@@ -245,11 +245,8 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:
                 max_results=max_results
             )
             
-            # Convert to Notification models
-            notifications = []
-            for data in notifications_data:
-                notification = Notification(**data)
-                notifications.append(notification.model_dump())
+            # Return notifications directly (already properly formatted)
+            notifications = notifications_data
             
             logger.info(f"Retrieved {len(notifications)} Gmail notifications")
             
@@ -316,11 +313,8 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:
                 max_results=args.max_results
             )
             
-            # Convert to Notification models
-            notifications = []
-            for data in notifications_data:
-                notification = Notification(**data)
-                notifications.append(notification.model_dump())
+            # Return notifications directly (already properly formatted)
+            notifications = notifications_data
             
             logger.info(f"Retrieved {len(notifications)} Slack notifications")
             
