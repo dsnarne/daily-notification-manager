@@ -415,7 +415,7 @@ class GmailIntegration:
             reputation_score = 4.0
         
         return {
-            "email": sender_email if hasattr(self, '_current_email') else f"user@{domain}",
+            "email": f"user@{domain}",
             "domain": domain,
             "domain_type": domain_type,
             "is_internal": is_company,

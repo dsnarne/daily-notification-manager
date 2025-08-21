@@ -21,12 +21,15 @@ Tools Available:
 from .models import (
     Notification,
     ListNotificationsArgs, 
+    SlackListNotificationsArgs,
     SenderImportance,
     ConversationMessage,
-    DomainInfo
+    DomainInfo,
+    SlackUserInfo,
+    SlackChannelInfo
 )
 
-from .integrations import gmail
+from .integrations import gmail, slack
 
 __version__ = "0.1.0"
 __author__ = "Your Name"
@@ -34,8 +37,12 @@ __author__ = "Your Name"
 __all__ = [
     "Notification",
     "ListNotificationsArgs",
+    "SlackListNotificationsArgs",
     "SenderImportance", 
     "ConversationMessage",
     "DomainInfo",
-    "gmail"
+    "SlackUserInfo",
+    "SlackChannelInfo",
+    "gmail",
+    "slack"
 ]

@@ -9,8 +9,9 @@ from mcp.server.stdio import stdio_server
 from mcp.server.models import InitializationOptions
 from mcp.server.lowlevel import NotificationOptions
 
-from .models import Notification, ListNotificationsArgs
+from .models import Notification, ListNotificationsArgs, SlackListNotificationsArgs
 from .integrations.gmail import GmailIntegration
+from .integrations.slack import SlackIntegration
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +27,14 @@ print("🔧 Initializing Gmail integration...")
 gmail_integration = GmailIntegration()
 print("✅ Gmail integration initialized")
 
+print("🔧 Initializing Slack integration...")
+try:
+    slack_integration = SlackIntegration()
+    print("✅ Slack integration initialized (user token)")
+except Exception as e:
+    print(f"⚠️ Slack integration failed to initialize: {e}")
+    print("💡 Add SLACK_USER_TOKEN to .env file to enable Slack integration")
+    slack_integration = None
 
 @server.list_tools()
 async def list_tools() -> List[Tool]:
@@ -111,6 +120,101 @@ async def list_tools() -> List[Tool]:
                 },
                 "required": ["sender_email"]
             }
+        ),
+        # Slack tools
+        Tool(
+            name="list_slack_notifications",
+            description="List recent Slack messages/notifications with optional filters",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "since_timestamp": {
+                        "type": "string",
+                        "description": "ISO-8601 timestamp to filter messages since this date"
+                    },
+                    "channel_filter": {
+                        "type": "string",
+                        "description": "Filter messages by channel name (partial match)"
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of messages to return",
+                        "default": 20
+                    }
+                },
+                "required": []
+            }
+        ),
+        Tool(
+            name="analyze_slack_user_importance",
+            description="Analyze the importance of a Slack user based on communication history and role",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "string",
+                        "description": "Slack user ID to analyze"
+                    },
+                    "days_back": {
+                        "type": "integer",
+                        "description": "Number of days to look back for analysis",
+                        "default": 30
+                    }
+                },
+                "required": ["user_id"]
+            }
+        ),
+        Tool(
+            name="get_slack_conversations",
+            description="Get recent conversation history with a specific Slack user",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "string",
+                        "description": "Slack user ID to get conversations with"
+                    },
+                    "days_back": {
+                        "type": "integer",
+                        "description": "Number of days to look back",
+                        "default": 7
+                    },
+                    "max_messages": {
+                        "type": "integer",
+                        "description": "Maximum number of messages to return",
+                        "default": 10
+                    }
+                },
+                "required": ["user_id"]
+            }
+        ),
+        Tool(
+            name="check_slack_user_workspace",
+            description="Check Slack user workspace information and permissions",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "string",
+                        "description": "Slack user ID to check"
+                    }
+                },
+                "required": ["user_id"]
+            }
+        ),
+        Tool(
+            name="get_slack_channel_info",
+            description="Get detailed information about a Slack channel",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "channel_id": {
+                        "type": "string",
+                        "description": "Slack channel ID to get information for"
+                    }
+                },
+                "required": ["channel_id"]
+            }
         )
     ]
 
@@ -184,6 +288,110 @@ async def call_tool(name: str, arguments: dict) -> List[TextContent]:
             return [TextContent(
                 type="text",
                 text=json.dumps(domain_info, ensure_ascii=False)
+            )]
+            
+        # Slack tools
+        elif name == "list_slack_notifications":
+            if not slack_integration:
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({"error": "Slack integration not available"})
+                )]
+            
+            args = SlackListNotificationsArgs(**arguments)
+            
+            notifications_data = await slack_integration.list_notifications(
+                since_timestamp=args.since_timestamp,
+                channel_filter=args.channel_filter,
+                max_results=args.max_results
+            )
+            
+            # Convert to Notification models
+            notifications = []
+            for data in notifications_data:
+                notification = Notification(**data)
+                notifications.append(notification.model_dump())
+            
+            logger.info(f"Retrieved {len(notifications)} Slack notifications")
+            
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "count": len(notifications),
+                    "notifications": notifications
+                }, ensure_ascii=False)
+            )]
+            
+        elif name == "analyze_slack_user_importance":
+            if not slack_integration:
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({"error": "Slack integration not available"})
+                )]
+            
+            user_id = arguments["user_id"]
+            days_back = arguments.get("days_back", 30)
+            
+            importance_data = await slack_integration.analyze_sender_importance(
+                user_id, days_back
+            )
+            
+            return [TextContent(
+                type="text",
+                text=json.dumps(importance_data, ensure_ascii=False)
+            )]
+            
+        elif name == "get_slack_conversations":
+            if not slack_integration:
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({"error": "Slack integration not available"})
+                )]
+            
+            user_id = arguments["user_id"]
+            days_back = arguments.get("days_back", 7)
+            max_messages = arguments.get("max_messages", 10)
+            
+            conversations = await slack_integration.get_recent_conversations(
+                user_id, days_back, max_messages
+            )
+            
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "user_id": user_id,
+                    "conversations": conversations
+                }, ensure_ascii=False)
+            )]
+            
+        elif name == "check_slack_user_workspace":
+            if not slack_integration:
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({"error": "Slack integration not available"})
+                )]
+            
+            user_id = arguments["user_id"]
+            user_info = await slack_integration.check_user_workspace(user_id)
+            
+            return [TextContent(
+                type="text",
+                text=json.dumps(user_info, ensure_ascii=False)
+            )]
+            
+        elif name == "get_slack_channel_info":
+            if not slack_integration:
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({"error": "Slack integration not available"})
+                )]
+            
+            channel_id = arguments["channel_id"]
+            channel_info = await slack_integration.get_channel_info(channel_id)
+            
+            return [TextContent(
+                type="text",
+                text=json.dumps(channel_info, ensure_ascii=False)
             )]
             
         else:
