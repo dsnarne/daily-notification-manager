@@ -39,7 +39,7 @@ async def create_integration(
             detail=f"Failed to create integration: {str(e)}"
         )
 
-@router.get("/", response_model=List[Integration])
+@router.get("/", response_model=List[Dict[str, Any]])
 async def list_integrations(
     platform: str = None,
     db: Session = Depends(get_db)

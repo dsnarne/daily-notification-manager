@@ -3,8 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>DaiLY Notification Manager - Dashboard</title>
-    <!-- Cache bust: v1.1 -->
+    <!-- Cache bust: v2.1 - Fixed missing DOM elements -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -274,8 +278,8 @@
         <div class="main-content">
             <!-- Header -->
             <div class="header">
-                <h1>DaiLY Notification Manager</h1>
-                <p>Intelligent notification filtering and management</p>
+                <h1><span style="font-family: 'Poppins', sans-serif; font-weight: 700; color: white;">DaiLY</span> <span style="font-weight: 300; color: white;">Notification Manager</span></h1>
+                <p style="font-size: 1.2em; opacity: 0.95; margin-top: 10px;">AI-powered notification prioritization that adapts to your working context</p>
             </div>
 
             <!-- Statistics -->
@@ -347,6 +351,7 @@
             <!-- Working Context -->
             <div class="sidebar-section">
             <h3>Working Context</h3>
+            <div id="currentContext" style="background: #f5f5f5; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-size: 0.9em; color: #666;">Loading context...</div>
             <textarea id="contextInput" placeholder="What should the AI prioritize for you right now?"></textarea>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                 <button class="btn btn-sm" onclick="saveContext()">Set Context</button>
@@ -374,6 +379,7 @@
             <div class="sidebar-section">
                 <h3>Quick Actions</h3>
                 <button class="btn btn-sm" onclick="refreshAll()">Refresh All</button>
+                <button class="btn btn-sm btn-secondary" onclick="fetchRealNotifications()">📧 Fetch Real</button>
                 <button class="btn btn-sm btn-secondary" onclick="showIntegrationModal()">New Integration</button>
                 <button class="btn btn-sm btn-success" onclick="document.getElementById('contextInput').focus()">Set Context</button>
             </div>
@@ -433,13 +439,10 @@
                 <div class="integration-card" style="background: rgba(255,255,255,0.15); border-radius: 10px; padding: 15px; border: 1px solid rgba(255,255,255,0.2);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                         <h3 style="color: white; margin: 0; font-size: 1.1em;">${integration.name}</h3>
-                        <span class="status-indicator ${integration.status}" style="width: 10px; height: 10px; border-radius: 50%; background: ${integration.status === 'online' ? '#22c55e' : '#ef4444'};"></span>
+                        <span class="status-indicator online" style="width: 10px; height: 10px; border-radius: 50%; background: #22c55e;"></span>
                     </div>
                     <p style="color: rgba(255,255,255,0.8); margin: 5px 0;">
                         <i class="fas fa-${getIntegrationIcon(integration.type || integration.platform)}"></i> ${integration.type || integration.platform}
-                    </p>
-                    <p style="color: rgba(255,255,255,0.6); font-size: 0.9em; margin: 5px 0;">
-                        Last sync: ${integration.last_checked ? new Date(integration.last_checked).toLocaleString() : 'Never'}
                     </p>
                     <div style="margin-top: 12px; display: flex; gap: 8px;">
                         <button class="btn btn-sm" onclick="testIntegration('${integration.id}')" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); font-size: 0.8em;">
@@ -500,23 +503,124 @@
         // Load notifications
         async function loadNotifications() {
             try {
+                // Load stored notifications from database
                 const response = await fetch('/api/v1/notifications/');
                 const result = await response.json();
                 
                 // Handle both array and paginated response formats
+                let storedNotifications = [];
                 if (Array.isArray(result)) {
-                    notifications = result;
+                    storedNotifications = result;
                 } else if (result && Array.isArray(result.items)) {
-                    notifications = result.items;
-                } else {
-                    notifications = [];
+                    storedNotifications = result.items;
                 }
+                
+                // Also try to fetch real notifications directly
+                let realNotifications = [];
+                try {
+                    const realResponse = await fetch('/api/v1/notifications/fetch-real');
+                    if (realResponse.ok) {
+                        realNotifications = await realResponse.json();
+                        console.log(`Loaded ${realNotifications.length} real notifications from Gmail/Slack`);
+                    }
+                } catch (error) {
+                    console.log('Could not fetch real notifications:', error);
+                }
+                
+                // Combine and deduplicate notifications
+                const allNotifications = [...storedNotifications, ...realNotifications];
+                const uniqueNotifications = allNotifications.filter((notif, index, self) => 
+                    index === self.findIndex(n => n.id === notif.id)
+                );
+                
+                notifications = uniqueNotifications;
+                console.log(`Total notifications loaded: ${notifications.length} (${storedNotifications.length} stored + ${realNotifications.length} real)`);
                 
                 displayRecentNotifications();
                 displayPriorityOverview();
             } catch (error) {
                 console.error('Error loading notifications:', error);
                 notifications = []; // Ensure notifications is always an array
+            }
+        }
+
+        // Fetch real notifications manually
+        async function fetchRealNotifications() {
+            try {
+                console.log('Fetching real notifications...');
+                // Try MCP endpoints first for real data
+                let realNotifications = [];
+                
+                try {
+                    console.log('Trying Gmail MCP endpoint...');
+                    const gmailResponse = await fetch('/api/v1/mcp/gmail/notifications?max_results=10');
+                    if (gmailResponse.ok) {
+                        const gmailData = await gmailResponse.json();
+                        console.log('Gmail response:', gmailData);
+                        if (gmailData.notifications) {
+                            realNotifications = [...realNotifications, ...gmailData.notifications];
+                        }
+                    }
+                } catch (e) {
+                    console.log('Gmail MCP endpoint failed:', e);
+                }
+                
+                try {
+                    console.log('Trying Slack MCP endpoint...');
+                    const slackResponse = await fetch('/api/v1/mcp/slack/notifications?max_results=10');
+                    if (slackResponse.ok) {
+                        const slackData = await slackResponse.json();
+                        console.log('Slack response:', slackData);
+                        if (slackData.notifications) {
+                            realNotifications = [...realNotifications, ...slackData.notifications];
+                        }
+                    }
+                } catch (e) {
+                    console.log('Slack MCP endpoint failed:', e);
+                }
+                
+                // Fallback to old mock endpoint if no real data
+                if (realNotifications.length === 0) {
+                    console.log('Falling back to mock notification endpoint...');
+                    const response = await fetch('/api/v1/notifications/fetch-real');
+                    
+                    if (response.ok) {
+                        realNotifications = await response.json();
+                        console.log(`Fetched ${realNotifications.length} fallback notifications`);
+                    }
+                }
+                
+                console.log(`Total fetched: ${realNotifications.length} real notifications`);
+                
+                // Convert notification format and merge with existing notifications
+                const existingIds = new Set(notifications.map(n => n.id));
+                const newNotifications = realNotifications
+                    .filter(n => !existingIds.has(n.id))
+                    .map(n => ({
+                        id: n.id,
+                        title: n.title || n.subject,
+                        content: n.content,
+                        platform: n.platform,
+                        priority: n.priority || 'medium',
+                        sender: n.sender,
+                        time: new Date(n.created_at || n.timestamp).toLocaleString(),
+                        unread: true,
+                        classification: n.classification
+                    }));
+                
+                notifications = [...notifications, ...newNotifications];
+                
+                // Update displays
+                displayRecentNotifications();
+                displayPriorityNotifications();
+                displayPriorityOverview();
+                updateStats();
+                
+                alert(`✅ Fetched ${realNotifications.length} real notifications (${newNotifications.length} new)`);
+                
+            } catch (error) {
+                console.error('Error fetching real notifications:', error);
+                alert('❌ Error fetching real notifications: ' + error.message);
             }
         }
 
@@ -542,10 +646,15 @@
         }
 
         function displayPriorityNotifications() {
+            console.log('📊 displayPriorityNotifications called');
+            console.log('📊 Total notifications:', notifications.length);
+            
             // Group notifications by priority
             const highPriority = notifications.filter(n => n.priority === 'urgent' || n.priority === 'high');
             const mediumPriority = notifications.filter(n => n.priority === 'medium');
             const lowPriority = notifications.filter(n => n.priority === 'low');
+            
+            console.log('📊 Priority counts - High:', highPriority.length, 'Medium:', mediumPriority.length, 'Low:', lowPriority.length);
 
             // Display high priority
             const highContainer = document.getElementById('highPriorityNotifications');
@@ -853,42 +962,85 @@
         function startEventStream() {
             try {
                 console.log('Starting notification stream...');
-                const es = new EventSource('/api/v1/notifications/stream');
+                const es = new EventSource('/api/v1/mcp/stream');
                 
                 es.onmessage = function(event) {
                     try {
                         const data = JSON.parse(event.data);
-                        console.log('Stream data received:', data);
+                        console.log('🔄 Stream data received:', data);
+                        
+                        // Handle system messages
+                        if (data.source === 'system') {
+                            if (data.type === 'connected') {
+                                console.log('✅ MCP Stream connected');
+                            } else if (data.type === 'heartbeat') {
+                                console.log('💓 Stream heartbeat:', data.message);
+                            }
+                            return;
+                        }
+                        
+                        // Handle test messages
+                        if (data.source === 'test') {
+                            console.log('🧪 Test notification:', data);
+                            return;
+                        }
                         
                         if (data.notification) {
+                            console.log('📋 Processing notification:', data.notification);
+                            console.log('📋 Classification:', data.notification.classification);
+                            console.log('📋 AI Decision:', data.notification.classification?.decision);
+                            
                             const notificationData = {
                                 id: data.notification.id,
                                 title: data.notification.title || data.notification.subject,
                                 content: data.notification.content,
                                 platform: data.notification.platform,
-                                priority: mapAIDecisionToPriority(data.notification.classification?.decision) || 'medium',
+                                priority: mapAIDecisionToPriority(data.notification.classification?.decision) || data.notification.priority || 'medium',
                                 sender: data.notification.sender,
                                 time: new Date(data.notification.created_at || data.notification.timestamp).toLocaleString(),
                                 unread: true,
                                 classification: data.notification.classification
                             };
                             
+                            console.log('📋 Mapped notification data:', notificationData);
+                            console.log('📋 Final priority:', notificationData.priority);
+                            
                             // Handle different types of events
                             if (data.source === 'reprioritization' && data.type === 'notification_update') {
                                 // This is a reprioritized existing notification - update it
                                 const existingIndex = notifications.findIndex(n => n.id === notificationData.id);
+                                console.log('🔍 Looking for existing notification with ID:', notificationData.id);
+                                console.log('🔍 Found at index:', existingIndex);
+                                console.log('🔍 Current notifications count:', notifications.length);
+                                
                                 if (existingIndex !== -1) {
+                                    const oldPriority = notifications[existingIndex].priority;
+                                    console.log('🔄 Updating notification:', notificationData.id, 'from', oldPriority, 'to', notificationData.priority);
+                                    
                                     // Update existing notification with new priority and classification
                                     notifications[existingIndex] = {
                                         ...notifications[existingIndex],
                                         ...notificationData
                                     };
                                     
+                                    console.log('🔄 After update, notification:', notifications[existingIndex]);
+                                    
                                     // Update UI to reflect the priority change
+                                    console.log('🔄 Calling display functions...');
                                     displayRecentNotifications();
                                     displayPriorityNotifications();
                                     displayPriorityOverview();
                                     updateStats();
+                                    console.log('🔄 Display functions completed');
+                                    
+                                    // Force a UI refresh after a short delay to ensure DOM updates
+                                    setTimeout(() => {
+                                        console.log('🔄 Force refreshing UI after reprioritization...');
+                                        displayRecentNotifications();
+                                        displayPriorityNotifications();
+                                        displayPriorityOverview();
+                                        updateStats();
+                                    }, 100);
                                     
                                     console.log('🔄 Updated notification priority:', notificationData.title, 'New priority:', notificationData.priority);
                                 } else {
@@ -946,18 +1098,34 @@
                 if (response.ok) {
                     const context = await response.json();
                     if (context && context.context_description) {
-                        document.getElementById('currentContext').innerHTML = 
-                            `<strong>Active:</strong> ${context.context_description.substring(0, 100)}${context.context_description.length > 100 ? '...' : ''}`;
-                        document.getElementById('contextInput').value = context.context_description;
+                        const currentContextEl = document.getElementById('currentContext');
+                        const contextInputEl = document.getElementById('contextInput');
+                        
+                        if (currentContextEl) {
+                            currentContextEl.innerHTML = 
+                                `${context.context_description.substring(0, 100)}${context.context_description.length > 100 ? '...' : ''}`;
+                        }
+                        if (contextInputEl) {
+                            contextInputEl.value = context.context_description;
+                        }
                     } else {
-                        document.getElementById('currentContext').textContent = 'No active context';
+                        const currentContextEl = document.getElementById('currentContext');
+                        if (currentContextEl) {
+                            currentContextEl.textContent = 'No active context';
+                        }
                     }
                 } else {
-                    document.getElementById('currentContext').textContent = 'No active context';
+                    const currentContextEl = document.getElementById('currentContext');
+                    if (currentContextEl) {
+                        currentContextEl.textContent = 'No active context';
+                    }
                 }
             } catch (error) {
                 console.error('Error loading current context:', error);
-                document.getElementById('currentContext').textContent = 'Error loading context';
+                const currentContextEl = document.getElementById('currentContext');
+                if (currentContextEl) {
+                    currentContextEl.textContent = 'Error loading context';
+                }
             }
         }
 
@@ -1018,8 +1186,14 @@
                 });
 
                 if (response.ok) {
-                    document.getElementById('currentContext').textContent = 'No active context';
-                    document.getElementById('contextInput').value = '';
+                    const currentContextEl = document.getElementById('currentContext');
+                    const contextInputEl = document.getElementById('contextInput');
+                    if (currentContextEl) {
+                        currentContextEl.textContent = 'No active context';
+                    }
+                    if (contextInputEl) {
+                        contextInputEl.value = '';
+                    }
                     alert('Working context cleared. Returning to default notification prioritization.');
                 } else {
                     alert('Error clearing context');

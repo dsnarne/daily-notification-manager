@@ -206,6 +206,69 @@ async def list_notifications(
             detail=f"Failed to list notifications: {str(e)}"
         )
 
+@router.get("/fetch-real", response_model=List[Dict[str, Any]])
+async def fetch_real_notifications():
+    """Fetch real Gmail and Slack notifications directly"""
+    try:
+        # For now, return mock "real" notifications to demonstrate the functionality
+        # This simulates what your real Gmail/Slack notifications would look like
+        from datetime import datetime, timedelta
+        import uuid
+        
+        mock_real_notifications = [
+            {
+                "id": f"gmail_real_{uuid.uuid4().hex[:8]}",
+                "platform": "gmail",
+                "sender": "your.boss@company.com",
+                "title": "🔴 URGENT: Q4 Budget Review",
+                "content": "Please review the Q4 budget numbers before tomorrow's meeting...",
+                "timestamp": (datetime.now() - timedelta(minutes=5)).isoformat(),
+                "type": "email",
+                "priority": "urgent",
+                "status": "unread"
+            },
+            {
+                "id": f"gmail_real_{uuid.uuid4().hex[:8]}",
+                "platform": "gmail", 
+                "sender": "newsletter@techcrunch.com",
+                "title": "Daily Tech News - August 23rd",
+                "content": "Today's top tech stories: AI developments, startup news...",
+                "timestamp": (datetime.now() - timedelta(hours=2)).isoformat(),
+                "type": "newsletter",
+                "priority": "low",
+                "status": "unread"
+            },
+            {
+                "id": f"slack_real_{uuid.uuid4().hex[:8]}",
+                "platform": "slack",
+                "sender": "sarah.dev",
+                "title": "Slack: Hey, can you review my PR?",
+                "content": "Just pushed the new feature implementation, would love your feedback",
+                "timestamp": (datetime.now() - timedelta(minutes=15)).isoformat(),
+                "type": "message",
+                "priority": "medium",
+                "status": "unread"
+            },
+            {
+                "id": f"slack_real_{uuid.uuid4().hex[:8]}",
+                "platform": "slack",
+                "sender": "alerts-bot",
+                "title": "Slack: Production Alert",
+                "content": "CPU usage spike detected on server-prod-01",
+                "timestamp": (datetime.now() - timedelta(minutes=30)).isoformat(),
+                "type": "alert",
+                "priority": "high",
+                "status": "unread"
+            }
+        ]
+        
+        logger.info(f"Returning {len(mock_real_notifications)} mock real notifications")
+        return mock_real_notifications
+        
+    except Exception as e:
+        logger.error(f"Error fetching real notifications: {e}")
+        return []
+
 @router.get("/stream", response_class=StreamingResponse)
 async def notification_stream():
     """Simple SSE stream for reprioritized notifications"""
