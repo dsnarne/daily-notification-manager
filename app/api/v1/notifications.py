@@ -3,8 +3,11 @@ Notification management API endpoints
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status, Query
+from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any, Optional
 import logging
+import asyncio
+import json
 
 from ...models.schemas import (
     NotificationCreate, NotificationUpdate, Notification,
@@ -13,6 +16,7 @@ from ...models.schemas import (
 )
 from ...services.notification_service import NotificationService
 from ...core.database import get_db
+from ...core.event_emitter import notification_emitter
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -43,16 +47,31 @@ async def reprioritize_notifications(
         # Convert to format expected by agent
         notification_list = []
         for notif in recent_notifications:
-            notification_data = {
-                "id": str(notif.id),
-                "platform": notif.platform,
-                "sender": notif.sender,
-                "subject": notif.title,
-                "content": notif.content,
-                "timestamp": notif.created_at.isoformat() if notif.created_at else "",
-                "type": notif.notification_type,
-                "priority": notif.priority
-            }
+            # Handle both database objects and dictionaries
+            if hasattr(notif, 'id'):
+                # Database object
+                notification_data = {
+                    "id": str(notif.id),
+                    "platform": notif.platform,
+                    "sender": notif.sender,
+                    "subject": notif.title,
+                    "content": notif.content,
+                    "timestamp": notif.created_at.isoformat() if notif.created_at else "",
+                    "type": notif.notification_type,
+                    "priority": notif.priority
+                }
+            else:
+                # Dictionary
+                notification_data = {
+                    "id": str(notif.get("id")),
+                    "platform": notif.get("platform"),
+                    "sender": notif.get("sender"),
+                    "subject": notif.get("title") or notif.get("subject"),
+                    "content": notif.get("content"),
+                    "timestamp": notif.get("created_at") or notif.get("timestamp", ""),
+                    "type": notif.get("notification_type") or notif.get("type"),
+                    "priority": notif.get("priority")
+                }
             notification_list.append(notification_data)
         
         # Process with agent using current context
@@ -61,6 +80,7 @@ async def reprioritize_notifications(
         
         # Update notification priorities based on agent decisions
         updated_count = 0
+        updated_notifications = []
         if result.decisions:
             for decision in result.decisions:
                 # Map agent categories to priority levels
@@ -80,6 +100,60 @@ async def reprioritize_notifications(
                 )
                 if success:
                     updated_count += 1
+                    # Get the updated notification for emission
+                    updated_notif = await service.get_notification(int(decision.notification_id))
+                    if updated_notif:
+                        # Handle both database objects and dictionaries
+                        if hasattr(updated_notif, 'id'):
+                            # Database object
+                            notification_dict = {
+                                "id": str(updated_notif.id),
+                                "platform": updated_notif.platform,
+                                "sender": updated_notif.sender,
+                                "subject": updated_notif.title,
+                                "content": updated_notif.content,
+                                "timestamp": updated_notif.created_at.isoformat() if updated_notif.created_at else "",
+                                "type": updated_notif.notification_type,
+                                "priority": updated_notif.priority,
+                                "classification": {
+                                    "decision": decision.decision,
+                                    "urgency_score": decision.urgency_score,
+                                    "importance_score": decision.importance_score,
+                                    "reasoning": decision.reasoning,
+                                    "suggested_action": decision.suggested_action,
+                                    "batch_group": decision.batch_group,
+                                    "context_used": decision.context_used
+                                }
+                            }
+                        else:
+                            # Dictionary
+                            notification_dict = {
+                                "id": str(updated_notif.get("id")),
+                                "platform": updated_notif.get("platform"),
+                                "sender": updated_notif.get("sender"),
+                                "subject": updated_notif.get("title") or updated_notif.get("subject"),
+                                "content": updated_notif.get("content"),
+                                "timestamp": updated_notif.get("created_at") or updated_notif.get("timestamp", ""),
+                                "type": updated_notif.get("notification_type") or updated_notif.get("type"),
+                                "priority": updated_notif.get("priority"),
+                                "classification": {
+                                    "decision": decision.decision,
+                                    "urgency_score": decision.urgency_score,
+                                    "importance_score": decision.importance_score,
+                                    "reasoning": decision.reasoning,
+                                    "suggested_action": decision.suggested_action,
+                                    "batch_group": decision.batch_group,
+                                    "context_used": decision.context_used
+                                }
+                            }
+                        updated_notifications.append(notification_dict)
+        
+        # Emit updated notifications via SSE to frontend
+        if updated_notifications:
+            await notification_emitter.emit_reprioritized_notifications(
+                updated_notifications, 
+                result.analysis_summary or f"Reprioritized {updated_count} notifications based on current context"
+            )
         
         return SuccessResponse(
             message=f"Successfully reprioritized {updated_count} notifications based on current context"
@@ -131,6 +205,47 @@ async def list_notifications(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list notifications: {str(e)}"
         )
+
+@router.get("/stream", response_class=StreamingResponse)
+async def notification_stream():
+    """Simple SSE stream for reprioritized notifications"""
+    async def event_generator():
+        # Store outbound messages queue for this stream
+        message_queue = asyncio.Queue()
+        
+        # Register this stream with the event emitter to receive reprioritized notifications
+        async def queue_message(sse_data):
+            await message_queue.put(sse_data)
+        
+        notification_emitter.add_listener(queue_message)
+        
+        try:
+            # Send initial heartbeat
+            yield f"data: {json.dumps({'source': 'system', 'type': 'connected', 'message': 'Notification stream connected'})}\n\n"
+            
+            while True:
+                try:
+                    # Check for queued messages from reprioritization
+                    try:
+                        queued_message = await asyncio.wait_for(message_queue.get(), timeout=30.0)
+                        yield queued_message
+                    except asyncio.TimeoutError:
+                        # Send heartbeat every 30 seconds to keep connection alive
+                        yield f"data: {json.dumps({'source': 'system', 'type': 'heartbeat', 'message': 'Stream active'})}\n\n"
+                        
+                except Exception as e:
+                    logger.error(f"Error in notification stream: {e}")
+                    yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                    break
+                    
+        finally:
+            # Clean up: remove this stream from the event emitter
+            try:
+                notification_emitter.remove_listener(queue_message)
+            except Exception as e:
+                logger.error(f"Error removing stream listener: {e}")
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @router.get("/{notification_id}", response_model=Notification)
 async def get_notification(
@@ -312,4 +427,5 @@ async def filter_notifications(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to filter notifications: {str(e)}"
-        ) 
+        )
+

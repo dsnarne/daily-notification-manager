@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from fastapi.responses import StreamingResponse
 
 from ...core.mcp_client import MCPCommunicationClient, MCPUserContextClient
+from ...core.event_emitter import notification_emitter
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../'))
@@ -374,6 +375,15 @@ async def mcp_stream(poll_seconds: int = 20):
         
         poll_cycle = 0
         
+        # Store outbound messages queue for this stream
+        message_queue = asyncio.Queue()
+        
+        # Register this stream with the event emitter to receive reprioritized notifications
+        async def queue_message(sse_data):
+            await message_queue.put(sse_data)
+        
+        notification_emitter.add_listener(queue_message)
+        
         import signal
         shutdown_flag = False
         
@@ -385,32 +395,41 @@ async def mcp_stream(poll_seconds: int = 20):
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
         
-        while not shutdown_flag:
-            try:
-                poll_cycle += 1
-                print(f"\n{'='*80}")
-                print(f"🔄 STREAM POLLING CYCLE #{poll_cycle} - {datetime.now().strftime('%H:%M:%S')}")
-                print(f"{'='*80}")
+        try:
+            while not shutdown_flag:
+                # First, check for any queued messages from reprioritization
+                while not message_queue.empty():
+                    try:
+                        queued_message = message_queue.get_nowait()
+                        yield queued_message
+                    except asyncio.QueueEmpty:
+                        break
                 
-                raw_notifications = []
-                
-                # Gmail notifications
-                print(f"📧 GMAIL: Calling list_gmail_notifications...")
                 try:
-                    gmail_items = await MCPCommunicationClient.call_tool(
-                        "list_gmail_notifications", {"query": "is:unread", "max_results": 20}
-                    )
-                    print(f"📧 GMAIL RESPONSE: {type(gmail_items)} = {gmail_items}")
+                    poll_cycle += 1
+                    print(f"\n{'='*80}")
+                    print(f"🔄 STREAM POLLING CYCLE #{poll_cycle} - {datetime.now().strftime('%H:%M:%S')}")
+                    print(f"{'='*80}")
                     
-                    if isinstance(gmail_items, dict) and "notifications" in gmail_items:
-                        gmail_items = gmail_items["notifications"]
-                        print(f"📧 GMAIL: Extracted {len(gmail_items)} notifications from dict")
-                    elif isinstance(gmail_items, list):
-                        print(f"📧 GMAIL: Got {len(gmail_items)} notifications directly")
-                    else:
-                        print(f"📧 GMAIL: Unexpected response type: {type(gmail_items)}")
+                    raw_notifications = []
+                    
+                    # Gmail notifications
+                    print(f"📧 GMAIL: Calling list_gmail_notifications...")
+                    try:
+                        gmail_items = await MCPCommunicationClient.call_tool(
+                            "list_gmail_notifications", {"query": "is:unread", "max_results": 20}
+                        )
+                        print(f"📧 GMAIL RESPONSE: {type(gmail_items)} = {gmail_items}")
                         
-                    if isinstance(gmail_items, list):
+                        if isinstance(gmail_items, dict) and "notifications" in gmail_items:
+                            gmail_items = gmail_items["notifications"]
+                            print(f"📧 GMAIL: Extracted {len(gmail_items)} notifications from dict")
+                        elif isinstance(gmail_items, list):
+                            print(f"📧 GMAIL: Got {len(gmail_items)} notifications directly")
+                        else:
+                            print(f"📧 GMAIL: Unexpected response type: {type(gmail_items)}")
+                            
+                        if isinstance(gmail_items, list):
                         new_gmail = 0
                         for item in gmail_items:
                             nid = item.get("id")
@@ -434,9 +453,9 @@ async def mcp_stream(poll_seconds: int = 20):
                                 raw_notifications.append(notification)
                                 print(f"📧 GMAIL NEW: {nid} - {notification['subject']}")
                         print(f"📧 GMAIL: Found {new_gmail} new notifications")
-                except Exception as e:
-                    print(f"❌ GMAIL ERROR: {e}")
-                    logger.warning(f"Gmail stream error: {e}")
+                    except Exception as e:
+                        print(f"❌ GMAIL ERROR: {e}")
+                        logger.warning(f"Gmail stream error: {e}")
 
                 # Slack notifications
                 print(f"💬 SLACK: Calling list_slack_notifications...")
@@ -656,6 +675,13 @@ async def mcp_stream(poll_seconds: int = 20):
 
             if not shutdown_flag:
                 await asyncio.sleep(max(5, poll_seconds))
+        
+        finally:
+            # Clean up: remove this stream from the event emitter
+            try:
+                notification_emitter.remove_listener(queue_message)
+            except Exception as e:
+                logger.error(f"Error removing stream listener: {e}")
         
         print("🏁 Stream stopped gracefully")
         yield f"event: shutdown\ndata: {json.dumps({'message': 'Stream stopped'})}\n\n"

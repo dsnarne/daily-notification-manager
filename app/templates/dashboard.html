@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DaiLY Notification Manager - Dashboard</title>
+    <!-- Cache bust: v1.1 -->
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -354,8 +355,6 @@
                 <span id="charCount" style="font-size:.85em;opacity:.6;margin-left:auto;"></span>
             </div>
 
-            <h3 style="margin-top:16px;">Recent</h3>
-            <div id="recentNotifications"></div>
             </div>
         
 
@@ -484,17 +483,17 @@
                     const context = await response.json();
                     if (context && context.context_description) {
                         document.getElementById('contextInput').value = context.context_description;
-                        document.getElementById('mainContextStatus').innerHTML = 
+                        document.getElementById('contextStatus').innerHTML = 
                             `<strong>Active Context:</strong> ${context.context_description.substring(0, 80)}${context.context_description.length > 80 ? '...' : ''}`;
                     } else {
-                        document.getElementById('mainContextStatus').textContent = 'No active context';
+                        document.getElementById('contextStatus').textContent = 'No active context';
                     }
                 } else {
-                    document.getElementById('mainContextStatus').textContent = 'No active context';
+                    document.getElementById('contextStatus').textContent = 'No active context';
                 }
             } catch (error) {
                 console.error('Error loading context:', error);
-                document.getElementById('mainContextStatus').textContent = 'Error loading context';
+                document.getElementById('contextStatus').textContent = 'Error loading context';
             }
         }
 
@@ -502,11 +501,22 @@
         async function loadNotifications() {
             try {
                 const response = await fetch('/api/v1/notifications/');
-                notifications = await response.json();
+                const result = await response.json();
+                
+                // Handle both array and paginated response formats
+                if (Array.isArray(result)) {
+                    notifications = result;
+                } else if (result && Array.isArray(result.items)) {
+                    notifications = result.items;
+                } else {
+                    notifications = [];
+                }
+                
                 displayRecentNotifications();
                 displayPriorityOverview();
             } catch (error) {
                 console.error('Error loading notifications:', error);
+                notifications = []; // Ensure notifications is always an array
             }
         }
 
@@ -674,7 +684,7 @@
 
                 if (response.ok) {
                     const result = await response.json();
-                    document.getElementById('mainContextStatus').innerHTML = 
+                    document.getElementById('contextStatus').innerHTML = 
                         `<strong>Active Context:</strong> ${contextText.substring(0, 80)}${contextText.length > 80 ? '...' : ''}`;
                     
                     // Trigger reprioritization
@@ -709,7 +719,7 @@
                 });
 
                 if (response.ok) {
-                    document.getElementById('mainContextStatus').textContent = 'No active context';
+                    document.getElementById('contextStatus').textContent = 'No active context';
                     document.getElementById('contextInput').value = '';
                     updateCharCount();
                     
@@ -843,7 +853,7 @@
         function startEventStream() {
             try {
                 console.log('Starting notification stream...');
-                const es = new EventSource('/api/v1/mcp/stream');
+                const es = new EventSource('/api/v1/notifications/stream');
                 
                 es.onmessage = function(event) {
                     try {
@@ -851,8 +861,7 @@
                         console.log('Stream data received:', data);
                         
                         if (data.notification) {
-                            // Add new notification to list
-                            const newNotification = {
+                            const notificationData = {
                                 id: data.notification.id,
                                 title: data.notification.title || data.notification.subject,
                                 content: data.notification.content,
@@ -864,18 +873,51 @@
                                 classification: data.notification.classification
                             };
                             
-                            // Prevent duplicates by checking if notification already exists
-                            if (!notifications.find(n => n.id === newNotification.id)) {
-                                notifications.unshift(newNotification); // Add to beginning
-                                notifications = notifications.slice(0, 50); // Keep only recent 50
-                                
-                                // Update UI
-                                displayRecentNotifications();
-                                displayPriorityNotifications();
-                                displayPriorityOverview();
-                                updateStats();
-                                
-                                console.log('Added new notification:', newNotification.title);
+                            // Handle different types of events
+                            if (data.source === 'reprioritization' && data.type === 'notification_update') {
+                                // This is a reprioritized existing notification - update it
+                                const existingIndex = notifications.findIndex(n => n.id === notificationData.id);
+                                if (existingIndex !== -1) {
+                                    // Update existing notification with new priority and classification
+                                    notifications[existingIndex] = {
+                                        ...notifications[existingIndex],
+                                        ...notificationData
+                                    };
+                                    
+                                    // Update UI to reflect the priority change
+                                    displayRecentNotifications();
+                                    displayPriorityNotifications();
+                                    displayPriorityOverview();
+                                    updateStats();
+                                    
+                                    console.log('🔄 Updated notification priority:', notificationData.title, 'New priority:', notificationData.priority);
+                                } else {
+                                    // Notification not found in current list, add it (might have been filtered out)
+                                    notifications.unshift(notificationData);
+                                    notifications = notifications.slice(0, 50); // Keep only recent 50
+                                    
+                                    displayRecentNotifications();
+                                    displayPriorityNotifications();
+                                    displayPriorityOverview();
+                                    updateStats();
+                                    
+                                    console.log('📝 Added reprioritized notification:', notificationData.title);
+                                }
+                            } else {
+                                // This is a new notification from streaming
+                                // Prevent duplicates by checking if notification already exists
+                                if (!notifications.find(n => n.id === notificationData.id)) {
+                                    notifications.unshift(notificationData); // Add to beginning
+                                    notifications = notifications.slice(0, 50); // Keep only recent 50
+                                    
+                                    // Update UI
+                                    displayRecentNotifications();
+                                    displayPriorityNotifications();
+                                    displayPriorityOverview();
+                                    updateStats();
+                                    
+                                    console.log('➕ Added new notification:', notificationData.title);
+                                }
                             }
                         }
                     } catch (e) {
@@ -944,9 +986,17 @@
 
                 if (response.ok) {
                     const result = await response.json();
-                    document.getElementById('currentContext').innerHTML = 
+                    document.getElementById('contextStatus').innerHTML = 
                         `<strong>Active:</strong> ${contextText.substring(0, 100)}${contextText.length > 100 ? '...' : ''}`;
-                    alert('Working context saved! The AI will now prioritize notifications based on this context.');
+                    
+                    // Trigger reprioritization
+                    const reprioritized = await triggerNotificationReprioritization();
+                    
+                    if (reprioritized) {
+                        alert('🎯 Working context saved and all notifications reprioritized! The AI is now using your context for smarter decisions.');
+                    } else {
+                        alert('🎯 Working context saved! The AI will use this context for new notifications.');
+                    }
                 } else {
                     const error = await response.json();
                     alert(`Error saving context: ${error.detail || 'Unknown error'}`);
