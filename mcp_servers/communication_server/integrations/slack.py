@@ -111,8 +111,11 @@ class SlackIntegration:
                             except:
                                 user_info = {"real_name": "Unknown User", "profile": {"email": ""}}
                         
-                        # Convert timestamp
-                        created_at = datetime.fromtimestamp(float(msg.get("ts", "0")))
+                        # Convert timestamp to ISO format string
+                        try:
+                            created_at = datetime.fromtimestamp(float(msg.get("ts", "0"))).isoformat()
+                        except (ValueError, TypeError):
+                            created_at = datetime.now().isoformat()
                         
                         # Build notification object
                         notification = {
@@ -317,7 +320,10 @@ class SlackIntegration:
                     except:
                         pass
                 
-                timestamp = datetime.fromtimestamp(float(msg.get("ts", "0")))
+                try:
+                    timestamp = datetime.fromtimestamp(float(msg.get("ts", "0")))
+                except (ValueError, TypeError):
+                    timestamp = datetime.now()
                 
                 conversation = {
                     "id": msg.get("ts", ""),
@@ -411,7 +417,7 @@ class SlackIntegration:
                 "is_private": channel.get("is_private", False),
                 "is_archived": channel.get("is_archived", False),
                 "member_count": len(members_data.get("members", [])),
-                "created": datetime.fromtimestamp(channel.get("created", 0)),
+                "created": datetime.fromtimestamp(channel.get("created", 0)).isoformat() if channel.get("created", 0) else datetime.now().isoformat(),
                 "creator": channel.get("creator", "")
             }
             

@@ -234,6 +234,26 @@ class ErrorResponse(BaseSchema):
     error: str
     details: Optional[str] = None
 
+# User Context schemas
+class UserContextBase(BaseSchema):
+    context_description: str = Field(..., min_length=10, max_length=2000)
+    expires_at: Optional[datetime] = None
+
+class UserContextCreate(UserContextBase):
+    pass
+
+class UserContextUpdate(BaseSchema):
+    context_description: Optional[str] = Field(None, min_length=10, max_length=2000)
+    is_active: Optional[bool] = None
+    expires_at: Optional[datetime] = None
+
+class UserContext(UserContextBase):
+    id: int
+    user_id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
 # Pagination schemas
 class PaginationParams(BaseSchema):
     page: int = Field(1, ge=1)

@@ -150,6 +150,136 @@ class NotificationService:
             logger.error(f"Failed to archive notification: {e}")
             raise
     
+    async def get_recent_notifications(self, user_id: int, hours_back: int = 24) -> List[Any]:
+        """Get recent notifications for reprioritization"""
+        try:
+            from ..core.database import Notification as NotificationModel
+            
+            cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
+            
+            # Query notifications from the last N hours
+            notifications = self.db.query(NotificationModel).filter(
+                NotificationModel.created_at >= cutoff_time
+            ).order_by(NotificationModel.created_at.desc()).all()
+            
+            return notifications
+            
+        except Exception as e:
+            logger.error(f"Failed to get recent notifications: {e}")
+            return []
+    
+    async def update_notification_priority(self, notification_id: int, new_priority: str) -> bool:
+        """Update notification priority"""
+        try:
+            from ..core.database import Notification as NotificationModel
+            from datetime import datetime
+            
+            notification = self.db.query(NotificationModel).filter(
+                NotificationModel.id == notification_id
+            ).first()
+            
+            if notification:
+                notification.priority = new_priority
+                notification.last_updated = datetime.utcnow()
+                self.db.commit()
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Failed to update notification priority: {e}")
+            return False
+    
+    async def upsert_notification(self, notification_data: Dict[str, Any]) -> Optional[Any]:
+        """Insert or update notification, preventing duplicates based on external_id"""
+        try:
+            from ..core.database import Notification as NotificationModel
+            from datetime import datetime
+            
+            external_id = notification_data.get("external_id")
+            platform = notification_data.get("platform")
+            
+            if not external_id or not platform:
+                logger.warning("Cannot upsert notification without external_id and platform")
+                return None
+            
+            # Check if notification already exists
+            existing = self.db.query(NotificationModel).filter(
+                NotificationModel.external_id == external_id,
+                NotificationModel.platform == platform
+            ).first()
+            
+            if existing:
+                # Update existing notification with new priority/status if different
+                updated = False
+                if existing.priority != notification_data.get("priority", existing.priority):
+                    existing.priority = notification_data.get("priority", existing.priority)
+                    updated = True
+                
+                if existing.status != notification_data.get("status", existing.status):
+                    existing.status = notification_data.get("status", existing.status)
+                    updated = True
+                
+                if updated:
+                    existing.last_updated = datetime.utcnow()
+                    self.db.commit()
+                    logger.info(f"Updated existing notification {external_id}")
+                
+                return existing
+            else:
+                # Create new notification
+                new_notification = NotificationModel(
+                    integration_id=notification_data.get("integration_id", 1),  # Default integration
+                    external_id=external_id,
+                    title=notification_data.get("subject", notification_data.get("title", "Notification")),
+                    content=notification_data.get("content", ""),
+                    sender=notification_data.get("sender", ""),
+                    recipient=notification_data.get("recipient", ""),
+                    platform=platform,
+                    notification_type=notification_data.get("type", "message"),
+                    priority=notification_data.get("priority", "medium"),
+                    status=notification_data.get("status", "unread"),
+                    platform_metadata=notification_data.get("original_data", {}),
+                    created_at=datetime.utcnow(),
+                    last_updated=datetime.utcnow()
+                )
+                
+                self.db.add(new_notification)
+                self.db.commit()
+                self.db.refresh(new_notification)
+                
+                logger.info(f"Created new notification {external_id}")
+                return new_notification
+                
+        except Exception as e:
+            logger.error(f"Failed to upsert notification: {e}")
+            return None
+    
+    async def cleanup_old_notifications(self, hours_back: int = 48) -> int:
+        """Remove old notifications to prevent database bloat"""
+        try:
+            from ..core.database import Notification as NotificationModel
+            from datetime import datetime, timedelta
+            
+            cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
+            
+            # Delete old notifications that are read or archived
+            deleted = self.db.query(NotificationModel).filter(
+                NotificationModel.created_at < cutoff_time,
+                NotificationModel.status.in_(["read", "archived"])
+            ).delete()
+            
+            self.db.commit()
+            
+            if deleted > 0:
+                logger.info(f"Cleaned up {deleted} old notifications")
+            
+            return deleted
+            
+        except Exception as e:
+            logger.error(f"Failed to cleanup old notifications: {e}")
+            return 0
+    
     async def bulk_mark_read(self, notification_ids: List[int]) -> int:
         """Mark multiple notifications as read"""
         try:

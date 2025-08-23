@@ -154,7 +154,22 @@ Type: {notification.get('type', 'message')}
         
         return "\n\n".join(formatted)
     
-    async def process_notifications(self, notifications: List[Dict[str, Any]]) -> ProcessingResult:
+    async def get_user_context(self, user_id: int) -> Optional[str]:
+        """Fetch user's current active working context"""
+        try:
+            import httpx
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"http://localhost:8000/api/v1/context/current")
+                if response.status_code == 200:
+                    context_data = response.json()
+                    if context_data:
+                        return context_data.get("context_description")
+                return None
+        except Exception as e:
+            logger.warning(f"Failed to fetch user context: {e}")
+            return None
+    
+    async def process_notifications(self, notifications: List[Dict[str, Any]], user_id: int = 1) -> ProcessingResult:
         """Main processing function - analyze notifications and make decisions"""
         start_time = datetime.now()
         
@@ -162,14 +177,28 @@ Type: {notification.get('type', 'message')}
             # Initialize MCP servers
             await self.initialize_mcp_servers()
             
+            # Fetch user's current working context
+            user_context = await self.get_user_context(user_id)
+            
             # Format notifications
             notifications_text = self.format_notifications(notifications)
+            
+            # Prepare context-aware message
+            context_text = ""
+            if user_context:
+                context_text = f"""
+IMPORTANT - USER'S CURRENT WORKING CONTEXT:
+{user_context}
+
+Please heavily weight this context when making prioritization decisions. Consider how each notification relates to the user's current priorities and urgency.
+"""
             
             # Prepare messages
             messages = [
                 {
                     "role": "user",
                     "content": f"""
+{context_text}
 Please analyze these {len(notifications)} notifications and make priority decisions.
 
 {notifications_text}

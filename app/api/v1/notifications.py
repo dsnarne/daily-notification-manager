@@ -18,6 +18,80 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+@router.post("/reprioritize", response_model=SuccessResponse)
+async def reprioritize_notifications(
+    db: Session = Depends(get_db),
+    user_id: int = 1  # TODO: Get from auth
+):
+    """
+    Reprioritize all existing notifications based on current user context.
+    This endpoint is called when user updates their working context.
+    """
+    try:
+        # Import here to avoid circular imports
+        from agent.client import NotificationAgent
+        
+        # Get recent notifications (last 24 hours) for reprioritization
+        service = NotificationService(db)
+        recent_notifications = await service.get_recent_notifications(user_id, hours_back=24)
+        
+        if not recent_notifications:
+            return SuccessResponse(
+                message="No recent notifications to reprioritize"
+            )
+        
+        # Convert to format expected by agent
+        notification_list = []
+        for notif in recent_notifications:
+            notification_data = {
+                "id": str(notif.id),
+                "platform": notif.platform,
+                "sender": notif.sender,
+                "subject": notif.title,
+                "content": notif.content,
+                "timestamp": notif.created_at.isoformat() if notif.created_at else "",
+                "type": notif.notification_type,
+                "priority": notif.priority
+            }
+            notification_list.append(notification_data)
+        
+        # Process with agent using current context
+        agent = NotificationAgent()
+        result = await agent.process_notifications(notification_list, user_id=user_id)
+        
+        # Update notification priorities based on agent decisions
+        updated_count = 0
+        if result.decisions:
+            for decision in result.decisions:
+                # Map agent categories to priority levels
+                priority_mapping = {
+                    "IMMEDIATE": "urgent",
+                    "BATCH": "high", 
+                    "DIGEST": "medium",
+                    "FILTER": "low"
+                }
+                
+                new_priority = priority_mapping.get(decision.decision, "medium")
+                
+                # Update in database
+                success = await service.update_notification_priority(
+                    int(decision.notification_id), 
+                    new_priority
+                )
+                if success:
+                    updated_count += 1
+        
+        return SuccessResponse(
+            message=f"Successfully reprioritized {updated_count} notifications based on current context"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error reprioritizing notifications: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reprioritize notifications: {str(e)}"
+        )
+
 @router.get("/", response_model=PaginatedResponse)
 async def list_notifications(
     platform: Optional[str] = None,

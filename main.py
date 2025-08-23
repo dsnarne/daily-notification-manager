@@ -46,8 +46,8 @@ app.add_middleware(
 
 # Templates
 templates = Jinja2Templates(directory="app/templates")
-# Mount API router under /api
-app.include_router(api_router, prefix="/api")
+# Mount API router under /api  
+app.include_router(api_router, prefix="/api/v1")
 
 # Initialize services (using mock services for now)
 # TODO: Replace with real database services when database is fully implemented
@@ -56,6 +56,7 @@ class MockIntegrationService:
         return [
             {
                 "id": "1",
+                "user_id": 1,
                 "name": "Gmail Integration",
                 "type": "email",
                 "status": "online",
@@ -64,6 +65,7 @@ class MockIntegrationService:
             },
             {
                 "id": "2",
+                "user_id": 1,
                 "name": "Slack Workspace",
                 "type": "slack",
                 "status": "offline",
@@ -73,10 +75,10 @@ class MockIntegrationService:
         ]
     
     async def create_integration(self, integration):
-        return {"id": "3", "name": integration.name, "platform": integration.platform, "config": integration.config}
+        return {"id": "3", "user_id": 1, "name": integration.name, "platform": integration.platform, "config": integration.config}
     
     async def update_integration(self, integration_id, integration):
-        return {"id": integration_id, "name": integration.name, "platform": integration.platform, "config": integration.config}
+        return {"id": integration_id, "user_id": 1, "name": integration.name, "platform": integration.platform, "config": integration.config}
     
     async def delete_integration(self, integration_id):
         return True
@@ -123,7 +125,7 @@ user_service = MockUserService()
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     """Serve the main dashboard"""
-    return templates.TemplateResponse("dashboard_enhanced.html", {"request": request})
+    return templates.TemplateResponse("dashboard.html", {"request": request})
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_legacy(request: Request):
@@ -194,33 +196,6 @@ async def delete_integration(integration_id: str):
         logger.error(f"Error deleting integration: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.get("/api/notifications")
-async def get_notifications():
-    """Get all notifications"""
-    try:
-        # Mock data for now
-        notifications = [
-            {
-                "id": "1",
-                "title": "Welcome to DaiLY",
-                "content": "Your notification manager is ready!",
-                "platform": "system",
-                "priority": "medium",
-                "created_at": datetime.now().isoformat()
-            },
-            {
-                "id": "2",
-                "title": "Email from Boss",
-                "content": "Please review the quarterly report",
-                "platform": "email",
-                "priority": "high",
-                "created_at": datetime.now().isoformat()
-            }
-        ]
-        return notifications
-    except Exception as e:
-        logger.error(f"Error getting notifications: {e}")
-        return []
 
 @app.get("/api/rules")
 async def get_rules():

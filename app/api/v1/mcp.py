@@ -316,7 +316,7 @@ async def test_mcp_stream(poll_seconds: int = 10):
                         
                         # Classify the notification
                         logger.info(f"Test: Classifying notification {counter + 1}: {mock_notif['subject']}")
-                        result = await agent.process_notifications(raw_notifications)
+                        result = await agent.process_notifications(raw_notifications, user_id=1)
                         
                         # Emit classified notification
                         for decision in result.decisions:
@@ -427,7 +427,9 @@ async def mcp_stream(poll_seconds: int = 20):
                                     "timestamp": item.get("timestamp", item.get("date", datetime.now().isoformat())),
                                     "type": item.get("type", "email"),
                                     "source": "gmail",
-                                    "original_data": item
+                                    "original_data": item,
+                                    "external_id": nid,  # Store external ID for deduplication
+                                    "last_updated": datetime.now().isoformat()
                                 }
                                 raw_notifications.append(notification)
                                 print(f"📧 GMAIL NEW: {nid} - {notification['subject']}")
@@ -469,7 +471,9 @@ async def mcp_stream(poll_seconds: int = 20):
                                     "timestamp": item.get("timestamp", item.get("ts", datetime.now().isoformat())),
                                     "type": item.get("type", "message"),
                                     "source": "slack",
-                                    "original_data": item
+                                    "original_data": item,
+                                    "external_id": nid,  # Store external ID for deduplication
+                                    "last_updated": datetime.now().isoformat()
                                 }
                                 raw_notifications.append(notification)
                                 print(f"💬 SLACK NEW: {nid} - {notification['subject']}")
@@ -523,73 +527,100 @@ async def mcp_stream(poll_seconds: int = 20):
 
                 print(f"📊 SUMMARY: Found {len(raw_notifications)} total new notifications to classify")
 
-                # Process notifications through classification agent if we have any new ones
+                # Store notifications in database to prevent duplicates
                 if raw_notifications:
                     try:
-                        print(f"\n🤖 CLASSIFICATION: Processing {len(raw_notifications)} notifications...")
+                        # Import notification service for database operations
+                        from ...services.notification_service import NotificationService
+                        from ...core.database import get_db
+                        
+                        db_session = next(get_db())
+                        service = NotificationService(db_session)
+                        
+                        # Upsert notifications to prevent duplicates
+                        stored_notifications = []
+                        for notif in raw_notifications:
+                            stored = await service.upsert_notification(notif)
+                            if stored:
+                                stored_notifications.append(notif)  # Keep original format for agent
+                        
+                        # Cleanup old notifications periodically (every 10 cycles)
+                        if poll_cycle % 10 == 0:
+                            cleaned = await service.cleanup_old_notifications(hours_back=48)
+                            if cleaned > 0:
+                                print(f"🧹 CLEANUP: Removed {cleaned} old notifications")
+                        
+                        db_session.close()
+                        
+                        print(f"\n🤖 CLASSIFICATION: Processing {len(stored_notifications)} notifications...")
                         print("🤖 INPUT TO MODEL:")
-                        for i, notif in enumerate(raw_notifications, 1):
+                        for i, notif in enumerate(stored_notifications, 1):
                             print(f"  {i}. {notif['platform']}: {notif['subject']} (from: {notif['sender']})")
                         
-                        result = await agent.process_notifications(raw_notifications)
-                        
-                        print(f"\n🤖 MODEL RESPONSE:")
-                        print(f"  Analysis: {result.analysis_summary}")
-                        print(f"  Decisions: {len(result.decisions)}")
-                        print(f"  Batch Groups: {len(result.batch_groups)}")
-                        
-                        # Emit classified notifications
-                        emitted_count = 0
-                        for decision in result.decisions:
-                            print(f"\n  📋 DECISION for {decision.notification_id}:")
-                            print(f"     🔥 Priority: {decision.decision} (U:{decision.urgency_score}/10, I:{decision.importance_score}/10)")
-                            print(f"     💭 Reasoning: {decision.reasoning}")
-                            print(f"     🎯 Action: {decision.suggested_action}")
-                            if decision.batch_group:
-                                print(f"     📦 Batch Group: {decision.batch_group}")
+                        if stored_notifications:  # Only process if we have notifications to process
+                            result = await agent.process_notifications(stored_notifications, user_id=1)
                             
-                            # Find original notification data
-                            original = next((n for n in raw_notifications if n['id'] == decision.notification_id), None)
-                            if original:
-                                enhanced_notification = {
-                                    **original,
-                                    "classification": {
-                                        "decision": decision.decision,
-                                        "urgency_score": decision.urgency_score,  
-                                        "importance_score": decision.importance_score,
-                                        "reasoning": decision.reasoning,
-                                        "suggested_action": decision.suggested_action,
-                                        "batch_group": decision.batch_group,
-                                        "context_used": decision.context_used
-                                    }
-                                }
+                            print(f"\n🤖 MODEL RESPONSE:")
+                            print(f"  Analysis: {result.analysis_summary}")
+                            print(f"  Decisions: {len(result.decisions)}")
+                            print(f"  Batch Groups: {len(result.batch_groups)}")
+                            
+                            # Emit classified notifications
+                            emitted_count = 0
+                            for decision in result.decisions:
+                                print(f"\n  📋 DECISION for {decision.notification_id}:")
+                                print(f"     🔥 Priority: {decision.decision} (U:{decision.urgency_score}/10, I:{decision.importance_score}/10)")
+                                print(f"     💭 Reasoning: {decision.reasoning}")
+                                print(f"     🎯 Action: {decision.suggested_action}")
+                                if decision.batch_group:
+                                    print(f"     📦 Batch Group: {decision.batch_group}")
                                 
-                                payload = {
-                                    "source": original["source"],
-                                    "notification": enhanced_notification,
-                                    "analysis_summary": result.analysis_summary
-                                }
-                                yield f"data: {json.dumps(payload, default=str)}\n\n"
-                                emitted_count += 1
-                        
-                        print(f"\n📤 EMITTED: {emitted_count} classified notifications to dashboard")
-                        
-                        # Also emit batch group information if available
-                        if result.batch_groups:
-                            batch_payload = {
-                                "source": "system",
-                                "type": "batch_groups",
-                                "batch_groups": {
-                                    name: {
-                                        "notifications": group.notifications,
-                                        "summary": group.summary,
-                                        "suggested_timing": group.suggested_timing
+                                # Find original notification data
+                                original = next((n for n in stored_notifications if n['id'] == decision.notification_id), None)
+                                if original:
+                                    enhanced_notification = {
+                                        **original,
+                                        "classification": {
+                                            "decision": decision.decision,
+                                            "urgency_score": decision.urgency_score,  
+                                            "importance_score": decision.importance_score,
+                                            "reasoning": decision.reasoning,
+                                            "suggested_action": decision.suggested_action,
+                                            "batch_group": decision.batch_group,
+                                            "context_used": decision.context_used
+                                        }
                                     }
-                                    for name, group in result.batch_groups.items()
+                                    
+                                    payload = {
+                                        "source": original["source"],
+                                        "notification": enhanced_notification,
+                                        "analysis_summary": result.analysis_summary
+                                    }
+                                    yield f"data: {json.dumps(payload, default=str)}\n\n"
+                                    emitted_count += 1
+                            
+                            print(f"\n📤 EMITTED: {emitted_count} classified notifications to dashboard")
+                            
+                            # Also emit batch group information if available
+                            if result.batch_groups:
+                                batch_payload = {
+                                    "source": "system",
+                                    "type": "batch_groups",
+                                    "batch_groups": {
+                                        name: {
+                                            "notifications": group.notifications,
+                                            "summary": group.summary,
+                                            "suggested_timing": group.suggested_timing
+                                        }
+                                        for name, group in result.batch_groups.items()
+                                    }
                                 }
-                            }
-                            yield f"data: {json.dumps(batch_payload, default=str)}\n\n"
-                            print(f"📤 EMITTED: Batch group information")
+                                yield f"data: {json.dumps(batch_payload, default=str)}\n\n"
+                                print(f"📤 EMITTED: Batch group information")
+                        else:
+                            print("🤖 No new notifications to process (all were duplicates)")
+                            # Still emit a heartbeat to keep connection alive
+                            yield f"data: {json.dumps({'source': 'system', 'type': 'heartbeat', 'message': 'No new notifications'}, default=str)}\n\n"
                             
                     except Exception as e:
                         print(f"❌ CLASSIFICATION ERROR: {e}")

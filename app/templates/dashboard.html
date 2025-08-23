@@ -28,7 +28,7 @@
             height: fit-content;
         }
         .header { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #fbbf24 0%, #14b8a6 100%);
             color: white;
             padding: 30px;
             border-radius: 15px;
@@ -63,7 +63,7 @@
         .stat-number { 
             font-size: 2em; 
             font-weight: bold; 
-            color: #667eea; 
+            color: #f59e0b; 
             margin-bottom: 10px;
         }
         .stat-label { 
@@ -81,14 +81,14 @@
             color: #333;
             margin-bottom: 20px;
             font-size: 1.5em;
-            border-bottom: 2px solid #667eea;
+            border-bottom: 2px solid #f59e0b;
             padding-bottom: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         .btn { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #fbbf24 0%, #14b8a6 100%);
             color: white;
             border: none;
             padding: 12px 24px;
@@ -114,7 +114,7 @@
             padding: 15px;
             border-radius: 8px;
             margin-bottom: 10px;
-            border-left: 4px solid #667eea;
+            border-left: 4px solid #f59e0b;
         }
         .integration-item h3, .rule-item h3 { 
             margin: 0 0 10px 0;
@@ -171,8 +171,100 @@
             color: #333;
             margin-bottom: 15px;
             font-size: 1.2em;
-            border-bottom: 2px solid #667eea;
+            border-bottom: 2px solid #f59e0b;
             padding-bottom: 8px;
+        }
+        
+        .notification-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .notification-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 4px solid;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .notification-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        
+        .notification-card.urgent {
+            border-left-color: #dc3545;
+        }
+        
+        .notification-card.high {
+            border-left-color: #fd7e14;
+        }
+        
+        .notification-card.medium {
+            border-left-color: #fbbf24;
+        }
+        
+        .notification-card.low {
+            border-left-color: #6c757d;
+        }
+        
+        .notification-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .notification-title {
+            font-weight: 600;
+            font-size: 1.1em;
+            color: #333;
+        }
+        
+        .notification-meta {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .notification-content {
+            color: #666;
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+        
+        .notification-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9em;
+            color: #888;
+        }
+        
+        .notification-ai-decision {
+            margin-top: 10px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .empty-state {
+            text-align: center;
+            color: #999;
+            font-style: italic;
+            padding: 20px;
+        }
+        
+        .priority-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
         }
     </style>
 </head>
@@ -205,27 +297,68 @@
                 </div>
             </div>
 
-            <!-- Integrations Section -->
-            <div class="section">
-                <h2>
-                    Integrations
-                    <button class="btn" onclick="showIntegrationModal()">Add Integration</button>
-                </h2>
-                <div id="integrationsList"></div>
+            <!-- Integrations Management Bar -->
+            <div class="integrations-bar" style="background: linear-gradient(135deg, #fbbf24 0%, #14b8a6 100%); padding: 20px; border-radius: 12px; margin-bottom: 20px; color: white;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 style="color: white; margin: 0; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-plug"></i>
+                        Connected Integrations
+                    </h2>
+                    <button class="btn" onclick="showIntegrationModal()" style="background: rgba(255,255,255,0.2); color: white; border: 2px solid rgba(255,255,255,0.3);">
+                        <i class="fas fa-plus"></i> Add Integration
+                    </button>
+                </div>
+                <div id="integrationsList" class="integrations-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;"></div>
             </div>
 
-            <!-- Rules Section -->
+            <!-- Priority Notifications Section -->
             <div class="section">
-                <h2>
-                    Notification Rules
-                    <button class="btn" onclick="showRuleModal()">Add Rule</button>
-                </h2>
-                <div id="rulesList"></div>
+                <h2>📋 Notifications by Priority</h2>
+                
+                <!-- High Priority Notifications -->
+                <div class="priority-section urgent" style="margin-bottom: 20px;">
+                    <h3 style="color: #dc3545; margin-bottom: 15px;">🔴 Immediate & High Priority</h3>
+                    <div id="highPriorityNotifications" class="notification-container">
+                        <div class="empty-state">No high priority notifications</div>
+                    </div>
+                </div>
+                
+                <!-- Medium Priority Notifications -->
+                <div class="priority-section medium" style="margin-bottom: 20px;">
+                    <h3 style="color: #fd7e14; margin-bottom: 15px;">🟡 Medium Priority</h3>
+                    <div id="mediumPriorityNotifications" class="notification-container">
+                        <div class="empty-state">No medium priority notifications</div>
+                    </div>
+                </div>
+                
+                <!-- Low Priority / Filtered -->
+                <div class="priority-section low">
+                    <h3 style="color: #6c757d; margin-bottom: 15px;">⚪ Low Priority & Filtered</h3>
+                    <div id="lowPriorityNotifications" class="notification-container">
+                        <div class="empty-state">No low priority notifications</div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- Sidebar -->
         <div class="sidebar">
+            <!-- Working Context -->
+            <div class="sidebar-section">
+            <h3>Working Context</h3>
+            <textarea id="contextInput" placeholder="What should the AI prioritize for you right now?"></textarea>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="btn btn-sm" onclick="saveContext()">Set Context</button>
+                <button class="btn btn-sm btn-secondary" onclick="clearContext()">Clear</button>
+                <span id="contextStatus" style="font-size:.9em;opacity:.8;"></span>
+                <span id="charCount" style="font-size:.85em;opacity:.6;margin-left:auto;"></span>
+            </div>
+
+            <h3 style="margin-top:16px;">Recent</h3>
+            <div id="recentNotifications"></div>
+            </div>
+        
+
             <!-- Recent Notifications -->
             <div class="sidebar-section">
                 <h3>Recent Notifications</h3>
@@ -243,7 +376,7 @@
                 <h3>Quick Actions</h3>
                 <button class="btn btn-sm" onclick="refreshAll()">Refresh All</button>
                 <button class="btn btn-sm btn-secondary" onclick="showIntegrationModal()">New Integration</button>
-                <button class="btn btn-sm btn-success" onclick="showRuleModal()">New Rule</button>
+                <button class="btn btn-sm btn-success" onclick="document.getElementById('contextInput').focus()">Set Context</button>
             </div>
         </div>
     </div>
@@ -257,13 +390,22 @@
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
             refreshAll();
+            loadCurrentContext();
+            loadMainContext();
+            startEventStream(); // Start live notification stream
+            
+            // Add character counter to context input
+            const contextInput = document.getElementById('contextInput');
+            if (contextInput) {
+                contextInput.addEventListener('input', updateCharCount);
+                updateCharCount(); // Initial count
+            }
         });
 
         // Refresh all data
         async function refreshAll() {
             await Promise.all([
                 loadIntegrations(),
-                loadRules(),
                 loadNotifications()
             ]);
             updateStats();
@@ -272,7 +414,7 @@
         // Load integrations
         async function loadIntegrations() {
             try {
-                const response = await fetch('/api/integrations');
+                const response = await fetch('/api/v1/integrations/');
                 integrations = await response.json();
                 displayIntegrations();
             } catch (error) {
@@ -284,72 +426,82 @@
         function displayIntegrations() {
             const container = document.getElementById('integrationsList');
             if (integrations.length === 0) {
-                container.innerHTML = '<p>No integrations configured. Add your first integration to get started.</p>';
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: rgba(255,255,255,0.8);">No integrations configured. Add your first integration to get started!</div>';
                 return;
             }
 
             container.innerHTML = integrations.map(integration => `
-                <div class="integration-item">
-                    <h3>
-                        ${integration.name}
-                        <div>
-                            <span class="platform-badge platform-${integration.platform}">${integration.platform}</span>
-                            <span class="status-${integration.status}">${integration.status}</span>
-                        </div>
-                    </h3>
-                    <p><strong>Platform:</strong> ${integration.platform}</p>
-                    <p><strong>Last Checked:</strong> ${new Date(integration.last_checked).toLocaleString()}</p>
-                    <div>
-                        <button class="btn btn-sm btn-success" onclick="testIntegration('${integration.id}')">Test</button>
-                        <button class="btn btn-sm btn-secondary" onclick="editIntegration('${integration.id}')">Edit</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteIntegration('${integration.id}')">Delete</button>
+                <div class="integration-card" style="background: rgba(255,255,255,0.15); border-radius: 10px; padding: 15px; border: 1px solid rgba(255,255,255,0.2);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="color: white; margin: 0; font-size: 1.1em;">${integration.name}</h3>
+                        <span class="status-indicator ${integration.status}" style="width: 10px; height: 10px; border-radius: 50%; background: ${integration.status === 'online' ? '#22c55e' : '#ef4444'};"></span>
+                    </div>
+                    <p style="color: rgba(255,255,255,0.8); margin: 5px 0;">
+                        <i class="fas fa-${getIntegrationIcon(integration.type || integration.platform)}"></i> ${integration.type || integration.platform}
+                    </p>
+                    <p style="color: rgba(255,255,255,0.6); font-size: 0.9em; margin: 5px 0;">
+                        Last sync: ${integration.last_checked ? new Date(integration.last_checked).toLocaleString() : 'Never'}
+                    </p>
+                    <div style="margin-top: 12px; display: flex; gap: 8px;">
+                        <button class="btn btn-sm" onclick="testIntegration('${integration.id}')" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); font-size: 0.8em;">
+                            <i class="fas fa-sync"></i> Test
+                        </button>
+                        <button class="btn btn-sm" onclick="editIntegration('${integration.id}')" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); font-size: 0.8em;">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
                     </div>
                 </div>
             `).join('');
         }
 
-        // Load rules
-        async function loadRules() {
+        // Get integration icon
+        function getIntegrationIcon(type) {
+            const icons = {
+                'email': 'envelope',
+                'slack': 'slack',
+                'teams': 'microsoft',
+                'webhook': 'link',
+                'gmail': 'envelope'
+            };
+            return icons[type] || 'plug';
+        }
+
+        // Mark notification as read
+        function markAsRead(notificationId) {
+            const notification = notifications.find(n => n.id === notificationId);
+            if (notification) {
+                notification.unread = false;
+                displayRecentNotifications(); // Refresh display
+                console.log('Marked notification as read:', notificationId);
+            }
+        }
+
+        // Load main context on page load
+        async function loadMainContext() {
             try {
-                const response = await fetch('/api/rules');
-                rules = await response.json();
-                displayRules();
+                const response = await fetch('/api/v1/context/current');
+                if (response.ok) {
+                    const context = await response.json();
+                    if (context && context.context_description) {
+                        document.getElementById('contextInput').value = context.context_description;
+                        document.getElementById('mainContextStatus').innerHTML = 
+                            `<strong>Active Context:</strong> ${context.context_description.substring(0, 80)}${context.context_description.length > 80 ? '...' : ''}`;
+                    } else {
+                        document.getElementById('mainContextStatus').textContent = 'No active context';
+                    }
+                } else {
+                    document.getElementById('mainContextStatus').textContent = 'No active context';
+                }
             } catch (error) {
-                console.error('Error loading rules:', error);
+                console.error('Error loading context:', error);
+                document.getElementById('mainContextStatus').textContent = 'Error loading context';
             }
-        }
-
-        // Display rules
-        function displayRules() {
-            const container = document.getElementById('rulesList');
-            if (rules.length === 0) {
-                container.innerHTML = '<p>No notification rules configured. Create your first rule to start filtering notifications.</p>';
-                return;
-            }
-
-            container.innerHTML = rules.map(rule => `
-                <div class="rule-item">
-                    <h3>
-                        ${rule.name}
-                        <div>
-                            <span class="priority-badge priority-${rule.priority}">${rule.priority}</span>
-                            <span class="platform-badge platform-${rule.platform}">${rule.platform}</span>
-                        </div>
-                    </h3>
-                    <p><strong>Priority:</strong> ${rule.priority}</p>
-                    <p><strong>Platform:</strong> ${rule.platform}</p>
-                    <div style="margin-top: 10px;">
-                        <button class="btn btn-sm btn-secondary" onclick="editRule('${rule.id}')">Edit</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteRule('${rule.id}')">Delete</button>
-                    </div>
-                </div>
-            `).join('');
         }
 
         // Load notifications
         async function loadNotifications() {
             try {
-                const response = await fetch('/api/notifications');
+                const response = await fetch('/api/v1/notifications/');
                 notifications = await response.json();
                 displayRecentNotifications();
                 displayPriorityOverview();
@@ -360,21 +512,104 @@
 
         // Display recent notifications
         function displayRecentNotifications() {
-            const container = document.getElementById('recentNotifications');
-            const recent = notifications.slice(0, 5); // Show last 5
+            // Update sidebar recent notifications
+            const sidebarContainer = document.getElementById('recentNotifications');
+            const recent = notifications.slice(0, 5); // Show last 5 in sidebar
             
             if (recent.length === 0) {
-                container.innerHTML = '<p>No recent notifications</p>';
-                return;
+                sidebarContainer.innerHTML = '<p>No recent notifications</p>';
+            } else {
+                sidebarContainer.innerHTML = recent.map(notification => `
+                    <div class="notification-item-small">
+                        <h4>${notification.title}</h4>
+                        <p><small>${new Date(notification.timestamp).toLocaleString()}</small></p>
+                    </div>
+                `).join('');
+            }
+            
+            // Update main priority sections
+            displayPriorityNotifications();
+        }
+
+        function displayPriorityNotifications() {
+            // Group notifications by priority
+            const highPriority = notifications.filter(n => n.priority === 'urgent' || n.priority === 'high');
+            const mediumPriority = notifications.filter(n => n.priority === 'medium');
+            const lowPriority = notifications.filter(n => n.priority === 'low');
+
+            // Display high priority
+            const highContainer = document.getElementById('highPriorityNotifications');
+            if (highPriority.length === 0) {
+                highContainer.innerHTML = '<div class="empty-state">No high priority notifications</div>';
+            } else {
+                highContainer.innerHTML = highPriority.map(notification => `
+                    <div class="notification-card ${notification.priority}" onclick="markAsRead('${notification.id}')">
+                        <div class="notification-header">
+                            <div class="notification-title">${notification.title}</div>
+                            <div class="notification-meta">
+                                <span class="priority-badge priority-${notification.priority}">${notification.priority}</span>
+                                <span class="platform-badge platform-${notification.platform}">${notification.platform}</span>
+                            </div>
+                        </div>
+                        <div class="notification-content">${notification.content}</div>
+                        <div class="notification-footer">
+                            <span class="notification-sender">From: ${notification.sender}</span>
+                            <span class="notification-time">${notification.time}</span>
+                        </div>
+                        ${notification.classification ? `
+                            <div class="notification-ai-decision">
+                                <strong>AI Decision:</strong> ${notification.classification.reasoning}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
             }
 
-            container.innerHTML = recent.map(notification => `
-                <div class="notification-item">
-                    <h4>${notification.title}</h4>
-                    <p>${notification.message}</p>
-                    <p><small>${new Date(notification.timestamp).toLocaleString()}</small></p>
-                </div>
-            `).join('');
+            // Display medium priority
+            const mediumContainer = document.getElementById('mediumPriorityNotifications');
+            if (mediumPriority.length === 0) {
+                mediumContainer.innerHTML = '<div class="empty-state">No medium priority notifications</div>';
+            } else {
+                mediumContainer.innerHTML = mediumPriority.map(notification => `
+                    <div class="notification-card ${notification.priority}" onclick="markAsRead('${notification.id}')">
+                        <div class="notification-header">
+                            <div class="notification-title">${notification.title}</div>
+                            <div class="notification-meta">
+                                <span class="priority-badge priority-${notification.priority}">${notification.priority}</span>
+                                <span class="platform-badge platform-${notification.platform}">${notification.platform}</span>
+                            </div>
+                        </div>
+                        <div class="notification-content">${notification.content}</div>
+                        <div class="notification-footer">
+                            <span class="notification-sender">From: ${notification.sender}</span>
+                            <span class="notification-time">${notification.time}</span>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            // Display low priority
+            const lowContainer = document.getElementById('lowPriorityNotifications');
+            if (lowPriority.length === 0) {
+                lowContainer.innerHTML = '<div class="empty-state">No low priority notifications</div>';
+            } else {
+                lowContainer.innerHTML = lowPriority.map(notification => `
+                    <div class="notification-card ${notification.priority}" onclick="markAsRead('${notification.id}')">
+                        <div class="notification-header">
+                            <div class="notification-title">${notification.title}</div>
+                            <div class="notification-meta">
+                                <span class="priority-badge priority-${notification.priority}">${notification.priority}</span>
+                                <span class="platform-badge platform-${notification.platform}">${notification.platform}</span>
+                            </div>
+                        </div>
+                        <div class="notification-content">${notification.content || 'No preview available'}</div>
+                        <div class="notification-footer">
+                            <span class="notification-sender">From: ${notification.sender}</span>
+                            <span class="notification-time">${notification.time}</span>
+                        </div>
+                    </div>
+                `).join('');
+            }
         }
 
         // Display priority overview
@@ -413,14 +648,154 @@
             document.getElementById('totalNotifications').textContent = notifications.length;
         }
 
+        // Main Context Functions
+        async function saveMainContext() {
+            const contextText = document.getElementById('contextInput').value.trim();
+            if (!contextText) {
+                alert('Please enter a working context description');
+                return;
+            }
+
+            if (contextText.length < 10) {
+                alert('Context description must be at least 10 characters');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/v1/context/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        context_description: contextText
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    document.getElementById('mainContextStatus').innerHTML = 
+                        `<strong>Active Context:</strong> ${contextText.substring(0, 80)}${contextText.length > 80 ? '...' : ''}`;
+                    
+                    // Trigger reprioritization
+                    const reprioritized = await triggerNotificationReprioritization();
+                    
+                    if (reprioritized) {
+                        alert('🎯 Working context saved and all notifications reprioritized! The AI is now using your context for smarter decisions.');
+                    } else {
+                        alert('🎯 Working context saved! The AI will use this context for new notifications.');
+                    }
+                    
+                    // Update sidebar context too
+                    loadCurrentContext();
+                } else {
+                    const error = await response.json();
+                    alert(`Error saving context: ${error.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Error saving context:', error);
+                alert('Error saving context. Please try again.');
+            }
+        }
+
+        async function clearMainContext() {
+            if (!confirm('Are you sure you want to clear your working context? This will return to default notification prioritization and reprioritize all notifications.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/v1/context/current', {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    document.getElementById('mainContextStatus').textContent = 'No active context';
+                    document.getElementById('contextInput').value = '';
+                    updateCharCount();
+                    
+                    // Trigger reprioritization
+                    await triggerNotificationReprioritization();
+                    
+                    alert('Working context cleared. All notifications have been reprioritized with default settings.');
+                    
+                    // Update sidebar context too
+                    loadCurrentContext();
+                } else {
+                    alert('Error clearing context');
+                }
+            } catch (error) {
+                console.error('Error clearing context:', error);
+                alert('Error clearing context. Please try again.');
+            }
+        }
+
+        // Character counter
+        function updateCharCount() {
+            const input = document.getElementById('contextInput');
+            const counter = document.getElementById('charCount');
+            if (input && counter) {
+                const length = input.value.length;
+                counter.textContent = `${length} characters`;
+                counter.style.color = length > 1800 ? '#dc3545' : length > 1500 ? '#fd7e14' : '#999';
+            }
+        }
+
+        // Quick context templates
+        function setQuickContext(type) {
+            const input = document.getElementById('contextInput');
+            let template = '';
+            
+            switch(type) {
+                case 'urgent-deadline':
+                    template = 'Working on urgent deadline due today. Only interrupt for emergencies from my direct manager or critical issues related to this project. Filter all non-essential notifications to digest.';
+                    break;
+                case 'deep-focus':
+                    template = 'In deep focus mode for complex project work. Only allow truly urgent communications from key stakeholders. Defer all meetings, newsletters, and routine updates.';
+                    break;
+                case 'meeting-prep':
+                    template = 'Preparing for important meeting/presentation. Only interrupt for communications from meeting participants or critical issues that affect the agenda. Filter promotional and routine emails.';
+                    break;
+                case 'client-work':
+                    template = 'Working on client deliverables with tight timeline. Prioritize client communications and urgent internal feedback. Filter non-client related notifications to batch or digest.';
+                    break;
+            }
+            
+            if (input && template) {
+                input.value = template;
+                updateCharCount();
+                input.focus();
+            }
+        }
+
+        // Trigger notification reprioritization
+        async function triggerNotificationReprioritization() {
+            try {
+                // Call the reprioritization endpoint
+                const response = await fetch('/api/v1/notifications/reprioritize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    console.log('Notifications reprioritized successfully');
+                    return true;
+                } else {
+                    console.warn('Reprioritization request failed:', response.status);
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error triggering reprioritization:', error);
+                return false;
+            }
+        }
+
         // Placeholder functions for modals
         function showIntegrationModal() {
             alert('Integration modal coming soon!');
         }
 
-        function showRuleModal() {
-            alert('Rule modal coming soon!');
-        }
 
         // CRUD Operations
         async function testIntegration(id) {
@@ -449,28 +824,160 @@
             }
         }
 
-        async function deleteRule(id) {
-            if (confirm('Are you sure you want to delete this rule?')) {
-                try {
-                    const response = await fetch(`/api/rules/${id}`, { method: 'DELETE' });
-                    if (response.ok) {
-                        alert('Rule deleted successfully!');
-                        refreshAll();
-                    } else {
-                        alert('Failed to delete rule');
-                    }
-                } catch (error) {
-                    alert('Error deleting rule');
-                }
-            }
-        }
-
         function editIntegration(id) {
             alert('Edit functionality coming soon!');
         }
 
-        function editRule(id) {
-            alert('Edit functionality coming soon!');
+        // Map AI decision to UI priority
+        function mapAIDecisionToPriority(decision) {
+            const mapping = {
+                'IMMEDIATE': 'urgent',
+                'BATCH': 'high',
+                'DIGEST': 'medium', 
+                'FILTER': 'low'
+            };
+            return mapping[decision] || 'medium';
+        }
+
+        // Live notification stream
+        function startEventStream() {
+            try {
+                console.log('Starting notification stream...');
+                const es = new EventSource('/api/v1/mcp/stream');
+                
+                es.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('Stream data received:', data);
+                        
+                        if (data.notification) {
+                            // Add new notification to list
+                            const newNotification = {
+                                id: data.notification.id,
+                                title: data.notification.title || data.notification.subject,
+                                content: data.notification.content,
+                                platform: data.notification.platform,
+                                priority: mapAIDecisionToPriority(data.notification.classification?.decision) || 'medium',
+                                sender: data.notification.sender,
+                                time: new Date(data.notification.created_at || data.notification.timestamp).toLocaleString(),
+                                unread: true,
+                                classification: data.notification.classification
+                            };
+                            
+                            // Prevent duplicates by checking if notification already exists
+                            if (!notifications.find(n => n.id === newNotification.id)) {
+                                notifications.unshift(newNotification); // Add to beginning
+                                notifications = notifications.slice(0, 50); // Keep only recent 50
+                                
+                                // Update UI
+                                displayRecentNotifications();
+                                displayPriorityNotifications();
+                                displayPriorityOverview();
+                                updateStats();
+                                
+                                console.log('Added new notification:', newNotification.title);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error processing stream data:', e);
+                    }
+                };
+                
+                es.onerror = function(event) {
+                    console.log('EventSource error:', event);
+                    // Reconnect after 5 seconds
+                    setTimeout(() => {
+                        console.log('Reconnecting to stream...');
+                        startEventStream();
+                    }, 5000);
+                };
+                
+            } catch (e) { 
+                console.error('startEventStream error', e);
+            }
+        }
+
+        // Context Management Functions
+        async function loadCurrentContext() {
+            try {
+                const response = await fetch('/api/v1/context/current');
+                if (response.ok) {
+                    const context = await response.json();
+                    if (context && context.context_description) {
+                        document.getElementById('currentContext').innerHTML = 
+                            `<strong>Active:</strong> ${context.context_description.substring(0, 100)}${context.context_description.length > 100 ? '...' : ''}`;
+                        document.getElementById('contextInput').value = context.context_description;
+                    } else {
+                        document.getElementById('currentContext').textContent = 'No active context';
+                    }
+                } else {
+                    document.getElementById('currentContext').textContent = 'No active context';
+                }
+            } catch (error) {
+                console.error('Error loading current context:', error);
+                document.getElementById('currentContext').textContent = 'Error loading context';
+            }
+        }
+
+        async function saveContext() {
+            const contextText = document.getElementById('contextInput').value.trim();
+            if (!contextText) {
+                alert('Please enter a working context description');
+                return;
+            }
+
+            if (contextText.length < 10) {
+                alert('Context description must be at least 10 characters');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/v1/context/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        context_description: contextText
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    document.getElementById('currentContext').innerHTML = 
+                        `<strong>Active:</strong> ${contextText.substring(0, 100)}${contextText.length > 100 ? '...' : ''}`;
+                    alert('Working context saved! The AI will now prioritize notifications based on this context.');
+                } else {
+                    const error = await response.json();
+                    alert(`Error saving context: ${error.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Error saving context:', error);
+                alert('Error saving context. Please try again.');
+            }
+        }
+
+        async function clearContext() {
+            if (!confirm('Are you sure you want to clear your working context? This will return to default notification prioritization.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/v1/context/current', {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    document.getElementById('currentContext').textContent = 'No active context';
+                    document.getElementById('contextInput').value = '';
+                    alert('Working context cleared. Returning to default notification prioritization.');
+                } else {
+                    alert('Error clearing context');
+                }
+            } catch (error) {
+                console.error('Error clearing context:', error);
+                alert('Error clearing context. Please try again.');
+            }
         }
     </script>
 </body>

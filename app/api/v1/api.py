@@ -3,7 +3,7 @@ Main API router for DaiLY Notification Manager
 """
 
 from fastapi import APIRouter
-from . import integrations, notifications, users, rules, preferences, assistant
+from . import integrations, notifications, users, rules, preferences, assistant, context
 
 api_router = APIRouter()
 
@@ -14,6 +14,7 @@ api_router.include_router(notifications.router, prefix="/notifications", tags=["
 api_router.include_router(rules.router, prefix="/rules", tags=["rules"]) 
 api_router.include_router(preferences.router, prefix="/preferences", tags=["preferences"])
 api_router.include_router(assistant.router, prefix="/assistant", tags=["assistant"])
+api_router.include_router(context.router, prefix="/context", tags=["context"])
 
 # Conditionally include MCP routes if the dependency is available
 try:

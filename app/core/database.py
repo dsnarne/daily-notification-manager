@@ -87,7 +87,7 @@ class Notification(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     integration_id = Column(Integer, ForeignKey("integrations.id"), nullable=False)
-    external_id = Column(String(255), nullable=True)  # ID from external platform
+    external_id = Column(String(255), nullable=True, index=True)  # ID from external platform
     title = Column(String(255), nullable=False)
     content = Column(Text, nullable=True)
     sender = Column(String(255), nullable=True)
@@ -99,6 +99,7 @@ class Notification(Base):
     platform_metadata = Column(JSON, nullable=True)  # Platform-specific metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     read_at = Column(DateTime(timezone=True), nullable=True)
+    last_updated = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Track updates
     
     # Relationships
     integration = relationship("Integration", back_populates="notifications")
@@ -117,6 +118,21 @@ class NotificationRule(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class UserContext(Base):
+    """User working context for dynamic notification prioritization"""
+    __tablename__ = "user_contexts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    context_description = Column(Text, nullable=False)  # User's current working context
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=True)  # Optional expiration
+    
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
 
 class NotificationHistory(Base):
     """Notification delivery history"""
